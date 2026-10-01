@@ -232,14 +232,14 @@ const Dashboard = {
     $('#tbl-luar').innerHTML = `<thead><tr><th>Tanggal</th><th>Pond</th><th>pH</th><th>TSS</th><th>Isian asli</th></tr></thead><tbody>${
       luar.length ? [...luar].reverse().map(r => {
         const b = cekBatas(r, p);
-        return `<tr><td>${fmtTgl(r.tgl)}</td><td>${esc(r.pond)}</td><td class="num ${b.phLuar ? 'luar' : ''}">${fmtPh(r.ph)}</td><td class="num ${b.tssLuar ? 'luar' : ''}">${fmtTss(r.tss)}</td><td class="muted small">${esc(r.v[KOL.SAMPLING])}</td></tr>`;
+        return `<tr><td data-label="Tanggal">${fmtTgl(r.tgl)}</td><td data-label="Pond">${esc(r.pond)}</td><td data-label="pH" class="num ${b.phLuar ? 'luar' : ''}">${fmtPh(r.ph)}</td><td data-label="TSS" class="num ${b.tssLuar ? 'luar' : ''}">${fmtTss(r.tss)}</td><td data-label="Isian asli" class="muted small">${esc(r.v[KOL.SAMPLING])}</td></tr>`;
       }).join('') : kosong(5, 'Tidak ada sampel di luar batas pada periode ini. ✓')
     }</tbody>`;
 
     $('#tbl-rusak').innerHTML = `<thead><tr><th>Pond</th><th>Masalah</th><th>Laporan</th><th>Status</th></tr></thead><tbody>${
       berulang.length ? berulang.map(g => `<tr>
-        <td>${esc(g.pond)}</td><td>${esc(g.label)}</td><td class="num">${g.jumlah}×</td>
-        <td>${g.aktif ? `<span class="badge bad">Masih dilaporkan</span><div class="muted small">sejak ${fmtTgl(g.pertama)}</div>` : `<span class="badge ok">Terakhir ${fmtTgl(g.terakhir)}</span>`}</td>
+        <td data-label="Pond">${esc(g.pond)}</td><td data-label="Masalah">${esc(g.label)}</td><td data-label="Laporan" class="num">${g.jumlah}×</td>
+        <td data-label="Status"><div>${g.aktif ? `<span class="badge bad">Masih dilaporkan</span><div class="muted small">sejak ${fmtTgl(g.pertama)}</div>` : `<span class="badge ok">Terakhir ${fmtTgl(g.terakhir)}</span>`}</div></td>
       </tr>`).join('') : kosong(4, 'Tidak ada kerusakan yang dilaporkan berulang.')
     }</tbody>`;
     $('#rusak-note').textContent = `Dari kolom keterangan kerusakan; dihitung berulang bila muncul ≥ 2 kali di periode ini. "Masih dilaporkan" = muncul lagi dalam ${APP_CONFIG.HARI_KERUSAKAN_AKTIF} hari terakhir data (s/d ${fmtTglPanjang(STATE.dataTerbaru)}).`;
@@ -247,7 +247,7 @@ const Dashboard = {
     const cek = rows.filter(r => r.sStatus === 'cek');
     $('#cek-count').textContent = cek.length;
     $('#tbl-cek').innerHTML = `<thead><tr><th>Tanggal</th><th>Pond</th><th>Baris sheet</th><th>Isian</th></tr></thead><tbody>${
-      cek.length ? cek.map(r => `<tr><td>${fmtTgl(r.tgl)}</td><td>${esc(r.pond)}</td><td class="num">${esc(r.r)}</td><td>${esc(r.v[KOL.SAMPLING])}</td></tr>`).join('') : kosong(4, 'Semua isian terbaca.')
+      cek.length ? cek.map(r => `<tr><td data-label="Tanggal">${fmtTgl(r.tgl)}</td><td data-label="Pond">${esc(r.pond)}</td><td data-label="Baris sheet" class="num">${esc(r.r)}</td><td data-label="Isian">${esc(r.v[KOL.SAMPLING])}</td></tr>`).join('') : kosong(4, 'Semua isian terbaca.')
     }</tbody>`;
   }
 };
