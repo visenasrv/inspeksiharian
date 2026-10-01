@@ -17,14 +17,19 @@ async function bacaJson(res) {
   }
 }
 
-/** GET ?action=... → data */
-async function apiGet(action) {
-  if (!gasUrlSiap()) throw new Error('GAS_URL belum diisi di js/config.js.');
-  const url = `${APP_CONFIG.GAS_URL}?action=${encodeURIComponent(action)}&_=${Date.now()}`;
-  const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+/** Ambil .data dari respons, lempar error bila success=false */
+async function dataDariRespons(res) {
   const json = await bacaJson(res);
   if (!json.success) throw new Error(json.message || 'Permintaan gagal.');
   return json.data;
+}
+
+/** GET ?action=...&param=... → data */
+async function apiGet(action, params = {}) {
+  if (!gasUrlSiap()) throw new Error('GAS_URL belum diisi di js/config.js.');
+  const q = new URLSearchParams(Object.assign({ action }, params, { _: Date.now() }));
+  const res = await fetch(`${APP_CONFIG.GAS_URL}?${q}`, { method: 'GET', redirect: 'follow' });
+  return dataDariRespons(res);
 }
 
 /** POST {action, ...isi} → respons utuh {success, message, data} */

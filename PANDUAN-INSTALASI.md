@@ -30,6 +30,13 @@ Data tetap di sheet respons Google Form yang sudah ada. Google Form lama tetap b
    - Klik **Deploy** → **salin URL** yang berakhiran **`/exec`**.
 7. Uji: buka `URL_EXEC?action=ping` di browser. Harus tampil `{"success":true,"message":"API Inspeksi Harian aktif",...}`.
 
+### Memperbarui dari versi sebelumnya (wajib untuk versi 2.0)
+
+1. Tempel `Kode.gs` versi baru, lalu simpan.
+2. Jalankan **`setupAplikasi`** sekali lagi. Langkah ini memasang pemicu `perbaruiCache` (tiap 5 menit) dan mengisi cache pertama kali. Cek di menu **Pemicu (ikon jam)** di kiri editor: harus ada 1 pemicu `perbaruiCache`.
+3. Buka **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy.** Dengan cara ini URL `/exec` tidak berubah.
+4. Bila ada sheet **Input Aplikasi** dari versi sebelumnya dan isinya kosong, sheet itu boleh dihapus.
+
 ### Mengubah Kode.gs di kemudian hari
 
 Supaya **URL tidak berubah**, jangan buat "New deployment". Gunakan:
@@ -42,7 +49,6 @@ Admin akun belajar.id memblokir deploy Web App dengan akses **Anyone**. Gejalany
 ```
 Google Form → Spreadsheet belajar.id ──(IMPORTRANGE / IMPORTDATA)──► Spreadsheet Gmail ──► Apps Script ──► GitHub Pages
                                                                        ├─ Data Form        (hasil rumus, hanya-baca)
-                                                                       ├─ Input Aplikasi   (input dari aplikasi)
                                                                        └─ Pengaturan
 ```
 
@@ -66,12 +72,12 @@ Google Form → Spreadsheet belajar.id ──(IMPORTRANGE / IMPORTDATA)──►
 
 4. Pastikan sel A1 sudah menampilkan **Timestamp** dan data di bawahnya.
 5. Dari spreadsheet Gmail ini, buka **Ekstensi → Apps Script**. Tempel `Kode.gs` dan biarkan `SPREADSHEET_ID_MANUAL` kosong. Lalu ikuti langkah A4–A7 di atas.
-   - Di Execution log akan muncul **"Mode IMPOR"**, dan sheet **Input Aplikasi** dibuat otomatis.
-6. Selesai. Data dari Google Form tampil otomatis. Input lewat menu **Input** di aplikasi disimpan ke sheet *Input Aplikasi* dan ikut tampil di dashboard dan laporan, tetapi **tidak** dikirim balik ke spreadsheet belajar.id.
+   - Di Execution log akan muncul **"Mode IMPOR"**, **"Pemicu perbaruiCache aktif"**, dan **"Cache data siap"**.
+6. Selesai. Data dari Google Form tampil otomatis di dashboard dan laporan.
 
 > **Jangan** menulis apa pun di bawah data pada sheet *Data Form*, karena rumus impor akan error (`#REF!`) saat data bertambah.
 
-**Alternatif:** bila spreadsheet belajar.id bisa dibagikan sebagai **Editor**, Bapak bisa membuat proyek di script.google.com (Gmail). Isi `SPREADSHEET_ID_MANUAL` dengan ID spreadsheet belajar.id. Dengan cara ini, input dari aplikasi langsung masuk ke sheet Google Form.
+**Alternatif:** bila spreadsheet belajar.id bisa dibagikan sebagai **Editor**, Bapak bisa membuat proyek di script.google.com (Gmail). Isi `SPREADSHEET_ID_MANUAL` dengan ID spreadsheet belajar.id. Dengan cara ini, rumus impor tidak diperlukan.
 
 ---
 
@@ -129,14 +135,12 @@ Bila tampilan belum berubah, tekan **Ctrl+Shift+R**.
 |---|---|
 | **Dashboard** | Grafik pH & TSS per pond, sampel di luar batas, kondisi terakhir tiap pond, kerusakan yang berulang |
 | **Laporan** | Pilih Harian / Mingguan (Senin–Minggu) / Bulanan / Rentang tanggal, filter pond & kata kunci → **Unduh PDF** (A4) atau **Cetak** |
-| **Input** | Isi inspeksi baru. Peralatan terisi otomatis dari laporan terakhir pond yang sama. pH & TSS diisi di kolom angka terpisah |
 | **Pengaturan** | Ubah judul lokasi, nama & jabatan penanda tangan, batas pH/TSS, margin & orientasi PDF (perlu PIN) |
 
-**Kecepatan & sinyal lemah:**
-- Setelah pembukaan pertama, aplikasi langsung menampilkan data terakhir yang tersimpan di perangkat (sekitar 0,1 detik), lalu memperbarui dari spreadsheet di latar belakang. Status di kanan atas menampilkan "Memperbarui…" selama proses itu.
-- Tombol **Simpan inspeksi** langsung menampilkan data di dashboard & laporan, lalu mengirimnya ke spreadsheet di latar belakang.
-- Bila sinyal putus, isian disimpan di perangkat dan status menampilkan **"1 belum terkirim"**. Data dikirim otomatis saat online kembali, atau saat tombol ⟳ ditekan. Kiriman ulang tidak membuat baris ganda.
-- Isian form Input yang belum disimpan juga tersimpan otomatis sebagai draf.
+**Kecepatan:**
+- **Server:** setiap 5 menit, pemicu `perbaruiCache` membaca spreadsheet dan menyiapkan data dalam bentuk jadi di cache Apps Script. Permintaan dari aplikasi langsung dilayani dari cache tanpa membuka spreadsheet, sehingga jauh lebih cepat.
+- **Browser:** setelah pembukaan pertama, aplikasi langsung menampilkan data terakhir yang tersimpan di perangkat, lalu memperbarui diam-diam di latar. Tidak ada layar loading. Saat pertama kali dibuka hanya tampil kerangka halus.
+- **Data terbaru:** isian baru dari Google Form muncul paling lambat ±5 menit (ditambah jeda IMPORTRANGE). Untuk mengambil data saat itu juga, tekan tombol **⟳** di kanan atas.
 
 **Tips cetak:** tombol **Unduh PDF** menghasilkan berkas yang sama di semua komputer (margin & nomor halaman terkunci). Bila memakai tombol **Cetak**, pilih kertas **A4**, Scale **100%**, dan matikan **Headers and footers** di dialog cetak.
 
@@ -144,7 +148,7 @@ Bila tampilan belum berubah, tekan **Ctrl+Shift+R**.
 
 ## Hal yang perlu diketahui
 
-- **Akses publik.** Dengan "Who has access: Anyone", siapa pun yang tahu alamat situs bisa melihat data dan mengirim input (sama seperti link Google Form). Pengaturan tetap terkunci PIN.
+- **Akses publik.** Dengan "Who has access: Anyone", siapa pun yang tahu alamat situs bisa melihat data (aplikasi ini hanya membaca data). Pengaturan tetap terkunci PIN.
 - **Batas mutu bawaan**: pH 6–9 dan TSS ≤ 200 mg/L. Ini nilai awal — sesuaikan dengan baku mutu yang berlaku di lokasi lewat menu Pengaturan.
 - **Nama pond** diseragamkan otomatis ("Uppar rangkok", "SLANTING", "Bemgkoang" → Upper Rangkok, Selanting, Bengkoang). Daftar kata kuncinya ada di `js/config.js` (`POND_ALIAS`). Data asli di sheet tidak diubah.
 - Ada 1 entri bernama **"Candra"** (11 April 2026) yang isinya mirip Bengkoang. Aplikasi menampilkannya apa adanya. Bila memang Bengkoang, perbaiki di sheet atau tambahkan `'candra'` ke kunci Bengkoang di `config.js`.
@@ -163,3 +167,4 @@ Bila tampilan belum berubah, tekan **Ctrl+Shift+R**.
 | Situs GitHub 404 | `index.html` tidak di root repo | Push ulang dari folder `inspeksi-harian` |
 | Data baru dari Google Form belum muncul | Cache browser, atau jeda rumus impor | Klik tombol ⟳ di kanan atas; untuk IMPORTDATA tunggu hingga ±1 jam |
 | "Data impor … belum siap (A1: #REF!)" | IMPORTRANGE belum diizinkan / rumus error | Buka spreadsheet Gmail, klik sel A1 → Izinkan akses |
+| Data baru tidak muncul walau sudah > 10 menit | Pemicu belum terpasang | Jalankan `setupAplikasi` sekali lagi; cek menu Pemicu ada `perbaruiCache` |

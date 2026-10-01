@@ -16,6 +16,10 @@ const Dashboard = {
     $('#dash-dari').addEventListener('change', e => { this.filter.dari = e.target.value; this.filter.range = null; this.render(); });
     $('#dash-sampai').addEventListener('change', e => { this.filter.sampai = e.target.value; this.filter.range = null; this.render(); });
     $('#dash-pond').addEventListener('change', e => { this.filter.pond = e.target.value; this.render(); });
+    $('#dash-bulan').addEventListener('change', e => {
+      if (e.target.value) this.setRange('m:' + e.target.value);
+      else { this.filter.range = null; this.render(); }
+    });
     $$('#sec-dashboard .chip').forEach(c => c.addEventListener('click', () => this.setRange(c.dataset.range)));
   },
 
@@ -24,12 +28,26 @@ const Dashboard = {
     const sel = $('#dash-pond');
     sel.innerHTML = '<option value="">Semua pond</option>' + STATE.ponds.map(p => `<option>${esc(p)}</option>`).join('');
     if (STATE.ponds.includes(this.filter.pond)) sel.value = this.filter.pond; else this.filter.pond = '';
+
+    // Pilihan bulan: semua bulan yang ada datanya, terbaru di atas
+    const bulan = [...new Set(STATE.rows.map(r => r.tgl.slice(0, 7)))].sort().reverse();
+    $('#dash-bulan').innerHTML = '<option value="">— rentang bebas —</option>' +
+      bulan.map(b => `<option value="${b}">${BULAN[Number(b.slice(5, 7)) - 1]} ${b.slice(0, 4)}</option>`).join('');
+    if (String(this.filter.range).startsWith('m:') && !bulan.includes(this.filter.range.slice(2))) this.filter.range = '30';
+
     if (this.filter.range || !this.filter.dari) this.setRange(this.filter.range || '30', false);
     this.render();
   },
 
   setRange(k, render = true) {
     const akhir = STATE.dataTerbaru;
+    if (String(k).startsWith('m:')) {            // filter bulan: 1 s/d akhir bulan (maks. data terbaru)
+      const [y, m] = k.slice(2).split('-').map(Number);
+      const ujung = akhirBulan(y, m);
+      Object.assign(this.filter, { dari: `${y}-${pad2(m)}-01`, sampai: ujung > akhir && `${y}-${pad2(m)}` === akhir.slice(0, 7) ? akhir : ujung, range: k });
+      if (render) this.render();
+      return;
+    }
     let dari = STATE.dataTerlama;
     if (k === '7') dari = tambahHari(akhir, -6);
     else if (k === '30') dari = tambahHari(akhir, -29);
@@ -37,6 +55,14 @@ const Dashboard = {
     if (dari < STATE.dataTerlama) dari = STATE.dataTerlama;
     Object.assign(this.filter, { dari, sampai: akhir, range: k });
     if (render) this.render();
+  },
+
+  /** 'YYYY-MM' bila rentang tepat satu bulan penuh (atau bulan berjalan s/d data terbaru) */
+  bulanCocok(dari, sampai) {
+    if (!dari || dari.slice(8) !== '01' || dari.slice(0, 7) !== sampai.slice(0, 7)) return '';
+    const [y, m] = dari.split('-').map(Number);
+    const ok = sampai === akhirBulan(y, m) || sampai === STATE.dataTerbaru;
+    return ok && [...$('#dash-bulan').options].some(o => o.value === dari.slice(0, 7)) ? dari.slice(0, 7) : '';
   },
 
   data() {
@@ -51,6 +77,7 @@ const Dashboard = {
     $('#dash-dari').value = f.dari;
     $('#dash-sampai').value = f.sampai;
     $$('#sec-dashboard .chip').forEach(c => c.classList.toggle('active', c.dataset.range === f.range));
+    $('#dash-bulan').value = this.bulanCocok(f.dari, f.sampai);
 
     const p = STATE.pengaturan;
     const rows = this.data();

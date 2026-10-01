@@ -1,38 +1,41 @@
 /* ============================================
-   APP — state, navigasi SPA, tema, notifikasi, data & antrian kirim
+   APP — state, navigasi SPA, tema, notifikasi, pemuatan data
    Prinsip gas-instant-ux:
-   1. SPA      : pindah menu = tampil/sembunyi section, render hanya saat dibutuhkan
-   2. Optimis  : data terakhir dari localStorage tampil seketika; input & pengaturan
-                 langsung terlihat, dikirim ke server di latar belakang (antrian)
-   3. Cache    : server memakai CacheService; browser memakai localStorage
-   4. Batch    : satu permintaan getData untuk semua menu
+   1. SPA     : pindah menu = tampil/sembunyi section, digambar hanya saat perlu
+   2. Optimis : data terakhir dari localStorage tampil seketika; pengaturan
+                langsung diterapkan lalu disimpan di latar
+   3. Cache   : server mengirim paket JSON jadi dari CacheService; browser localStorage
+   4. Batch   : satu permintaan getData untuk semua menu, dimulai di <head>
    ============================================ */
 
 const STATE = {
   headers: [], rows: [], ponds: [], pengaturan: {},
   dataTerbaru: null, dataTerlama: null, dimuatPada: null,
-  siap: false, sidik: '', modeImpor: false, sheetInput: 'Input Aplikasi'
+  siap: false, sidik: '', modeImpor: false
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 /* ── Penyimpanan lokal (aman bila localStorage diblokir) ── */
-const KUNCI = { data: 'inspeksi-data-v1', antrian: 'inspeksi-antrian-v1', draft: 'inspeksi-draft-v1', tema: 'inspeksi-tema' };
+const KUNCI = { data: 'inspeksi-data-v1', tema: 'inspeksi-tema' };
 const simpanan = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
   del(k) { try { localStorage.removeItem(k); } catch (e) { /* abaikan */ } }
 };
+// Bersihkan sisa fitur Input versi lama
+['inspeksi-antrian-v1', 'inspeksi-draft-v1'].forEach(k => simpanan.del(k));
 
-/* ── Debounce ── */
 function debounce(fn, ms = 250) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
-/* ── Ambil data sedini mungkin, sebelum DOM selesai (paralel dengan render awal) ── */
-const fetchAwal = gasUrlSiap() ? apiGet('getData') : null;
+/* ── Data pertama: pakai fetch yang SUDAH dimulai di <head> (index.html) ── */
+const fetchAwal = window.__dataAwal
+  ? window.__dataAwal.then(dataDariRespons)
+  : (gasUrlSiap() ? apiGet('getData') : null);
 if (fetchAwal) fetchAwal.catch(() => { /* ditangani di segarkan() */ });
 
-/* ── Notifikasi & loading ── */
+/* ── Notifikasi ── */
 let toastTimer;
 function notif(pesan, jenis = 'ok') {
   const t = $('#toast');
@@ -40,10 +43,6 @@ function notif(pesan, jenis = 'ok') {
   t.className = `toast show ${jenis === 'error' ? 'error' : ''}`;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), jenis === 'error' ? 6000 : 3000);
-}
-function loading(tampil, teks = 'Memuat data…') {
-  $('#loading-text').textContent = teks;
-  $('#loading').hidden = !tampil;
 }
 
 /* ── Tema ── */
@@ -60,14 +59,13 @@ function temaAwal() {
 }
 
 /* ══════════ Prinsip 1 — SPA + render malas ══════════ */
-const SECTIONS = ['dashboard', 'laporan', 'input', 'pengaturan'];
+const SECTIONS = ['dashboard', 'laporan', 'pengaturan'];
 const kotor = new Set();     // menu yang perlu digambar ulang karena data berubah
 let sectionAktif = 'dashboard';
 
 const PENGGAMBAR = {
   dashboard: () => Dashboard.siapkan(),
   laporan: () => Laporan.siapkan(),
-  input: () => Input.siapkan(),
   pengaturan: () => Pengaturan.isi()
 };
 
@@ -97,26 +95,25 @@ function navigasi(id) {
 }
 window.addEventListener('hashchange', () => navigasi(location.hash.slice(1)));
 
+/* ══════════ Kerangka saat pertama kali (pengganti layar loading) ══════════ */
+function tampilkanKerangka() {
+  document.body.classList.add('memuat');
+  const kartu = () => '<div class="kpi"><span class="sk t" style="width:45%"></span><span class="sk v"></span><span class="sk t" style="width:70%"></span></div>';
+  $('#kpi-grid').innerHTML = kartu().repeat(4);
+  $('#insight-list').innerHTML = ['85%', '70%', '78%'].map(w => `<li style="list-style:none"><span class="sk t" style="width:${w}"></span></li>`).join('');
+  $('#pond-grid').innerHTML = '<div class="pond-card"><span class="sk t" style="width:50%"></span><span class="sk t" style="width:80%"></span><span class="sk v" style="width:100%;height:46px"></span></div>'.repeat(5);
+}
+function selesaiMemuat() { document.body.classList.remove('memuat'); }
+
 /* ══════════ Olah data API ══════════ */
 function hashTeks(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return String(h >>> 0); }
+const sidikData = d => hashTeks(JSON.stringify([d.headers, d.rows, d.pengaturan, d.modeImpor]));
 
 function barisDariMentah(x) {
   const v = [fmtWaktu(x[1]), fmtTgl(x[2])].concat(x.slice(3).map(s => String(s ?? '')));
   while (v.length < 19) v.push('');
   const s = parseSampling(v[KOL.SAMPLING]);
   return { r: x[0], ts: x[1], tgl: x[2], v, pondRaw: v[KOL.POND], pond: normPond(v[KOL.POND]), ph: s.ph, tss: s.tss, sStatus: s.status };
-}
-
-function urutkanBaris() {
-  STATE.rows.sort((a, b) => (a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : (a.ts < b.ts ? -1 : 1)));
-}
-
-function hitungTurunan() {
-  const ada = new Set(STATE.rows.map(r => r.pond));
-  const utama = APP_CONFIG.POND_ALIAS.map(p => p.nama).filter(n => ada.has(n));
-  STATE.ponds = utama.concat([...ada].filter(n => !utama.includes(n)).sort());
-  STATE.dataTerlama = STATE.rows.length ? STATE.rows[0].tgl : hariIni();
-  STATE.dataTerbaru = STATE.rows.length ? STATE.rows.reduce((m, r) => (r.tgl > m ? r.tgl : m), STATE.rows[0].tgl) : hariIni();
 }
 
 function olahPengaturan(p = {}) {
@@ -136,59 +133,53 @@ function olahPengaturan(p = {}) {
 function olahData(d) {
   STATE.headers = d.headers;
   STATE.modeImpor = !!d.modeImpor;
-  STATE.sheetInput = d.sheetInput || 'Input Aplikasi';
   STATE.pengaturan = olahPengaturan(d.pengaturan);
-  STATE.rows = d.rows.filter(x => x[2]).map(barisDariMentah);
-  gabungkanAntrian();          // kiriman yang belum sampai server tetap terlihat
-  urutkanBaris();
-  hitungTurunan();
+  STATE.rows = d.rows.filter(x => x[2]).map(barisDariMentah)
+    .sort((a, b) => (a.tgl < b.tgl ? -1 : a.tgl > b.tgl ? 1 : (a.ts < b.ts ? -1 : 1)));
+  const ada = new Set(STATE.rows.map(r => r.pond));
+  const utama = APP_CONFIG.POND_ALIAS.map(p => p.nama).filter(n => ada.has(n));
+  STATE.ponds = utama.concat([...ada].filter(n => !utama.includes(n)).sort());
+  STATE.dataTerlama = STATE.rows.length ? STATE.rows[0].tgl : hariIni();
+  STATE.dataTerbaru = STATE.rows.length ? STATE.rows.reduce((m, r) => (r.tgl > m ? r.tgl : m), STATE.rows[0].tgl) : hariIni();
   STATE.siap = true;
 }
 
-/* ══════════ Prinsip 2 & 3 — tampil dari cache, segarkan di latar ══════════ */
-function setSync(teks, kelas = '') {
-  const el = $('#sync-status');
-  el.textContent = teks;
-  el.dataset.state = kelas;
+function terapkanData(d, sidik) {
+  STATE.sidik = sidik;
+  olahData(d);
+  $('#brand-sub').textContent = STATE.pengaturan.judulLokasi;
+  selesaiMemuat();
+  tandaiSemuaKotor();
 }
-function teksSync() {
-  const jam = STATE.dimuatPada ? new Date(STATE.dimuatPada).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '–';
-  const n = antrian().length;
-  return `${STATE.rows.length} entri · ${jam}${n ? ` · ${n} belum terkirim` : ''}`;
-}
-function perbaruiSync() { setSync(teksSync(), antrian().length ? 'warn' : ''); }
 
+function perbaruiSync() {
+  const jam = STATE.dimuatPada ? new Date(STATE.dimuatPada).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '–';
+  $('#sync-status').textContent = `${STATE.rows.length} entri · ${jam}`;
+}
+
+/* ══════════ Prinsip 2 & 3 — tampil dari cache, segarkan senyap di latar ══════════ */
 let sedangSegar = null;
-async function segarkan({ awal = false, umumkan = false } = {}) {
+async function segarkan({ awal = false, paksa = false } = {}) {
   if (sedangSegar) return sedangSegar;
   const btn = $('#btn-refresh');
-  btn.classList.add('spin');
-  if (STATE.siap) setSync('Memperbarui…', 'sync');
+  if (paksa) btn.classList.add('spin'); // hanya tombol ⟳ yang berputar; penyegaran otomatis tidak terlihat
   sedangSegar = (async () => {
     try {
-      const d = await (awal && fetchAwal ? fetchAwal : apiGet('getData'));
-      const sidik = hashTeks(JSON.stringify([d.headers, d.rows, d.pengaturan, d.modeImpor]));
+      const d = await (awal && fetchAwal ? fetchAwal : apiGet('getData', paksa ? { segar: 1 } : {}));
       STATE.dimuatPada = Date.now();
       simpanan.set(KUNCI.data, { d, waktu: STATE.dimuatPada });
-      if (sidik !== STATE.sidik || !STATE.siap) {     // gambar ulang hanya bila ada perubahan
-        STATE.sidik = sidik;
-        olahData(d);
-        $('#brand-sub').textContent = STATE.pengaturan.judulLokasi;
-        tandaiSemuaKotor();
-      }
+      const sidik = sidikData(d);
+      if (sidik !== STATE.sidik || !STATE.siap) terapkanData(d, sidik); // gambar ulang hanya bila berubah
       perbaruiSync();
-      if (umumkan) notif('Data sudah yang terbaru.');
-      kirimAntrian();
+      if (paksa) notif('Data sudah yang terbaru.');
     } catch (err) {
       if (STATE.siap) {
-        setSync(`Offline · ${teksSync()}`, 'warn');
-        notif('Tidak bisa menghubungi server. Menampilkan data tersimpan.', 'error');
+        if (paksa) notif('Tidak bisa menghubungi server. Menampilkan data tersimpan.', 'error');
       } else {
         tampilkanGagal(err);
       }
     } finally {
       btn.classList.remove('spin');
-      loading(false);
       sedangSegar = null;
     }
   })();
@@ -196,94 +187,42 @@ async function segarkan({ awal = false, umumkan = false } = {}) {
 }
 
 function tampilkanGagal(err) {
-  setSync('Gagal memuat', 'warn');
+  selesaiMemuat();
+  $('#sync-status').textContent = 'Gagal memuat';
   notif('Gagal memuat data: ' + err.message, 'error');
   const pesan = gasUrlSiap()
     ? `<b>Data belum bisa dimuat.</b><br>${esc(err.message)}<br><span class="small">Cek: Web App sudah di-deploy (Execute as: Me, Who has access: Anyone) dan URL di <code>js/config.js</code> benar.</span>`
     : `<b>Aplikasi belum tersambung ke spreadsheet.</b><br>Isi <code>GAS_URL</code> di file <code>js/config.js</code> dengan URL <code>/exec</code> dari Apps Script, lalu push ulang ke GitHub.`;
   $('#kpi-grid').innerHTML = `<div class="alert" style="grid-column:1/-1">${pesan}</div>`;
-}
-
-/* ══════════ Antrian kirim (input optimis) ══════════ */
-function antrian() { return simpanan.get(KUNCI.antrian) || []; }
-function setAntrian(a) { simpanan.set(KUNCI.antrian, a); perbaruiSync(); }
-
-/** Baris lokal untuk kiriman yang belum dikonfirmasi server */
-function barisDariAntrian(item) {
-  const d = item.data, now = item.waktu;
-  const sampling = d.ph !== '' && d.tss !== '' ? `pH ${Number(String(d.ph).replace(',', '.')).toFixed(2)} TSS ${d.tss}`
-    : d.ph !== '' ? `pH ${Number(String(d.ph).replace(',', '.')).toFixed(2)}` : d.tss !== '' ? `TSS ${d.tss}` : '-';
-  const isi = [d.pond, d.lv, d.sop, d.alkon, d.phMeter, d.tssMeter, d.buffer, d.jaket, d.boot, d.sarungTangan, d.apar,
-    d.radio, d.eyeWash, d.apron, sampling, d.pekerjaTidakMasuk || '-', d.keterangan || '-'];
-  const row = barisDariMentah(['Menunggu', now, d.tanggal].concat(isi.map(x => x ?? '')));
-  row.pending = true;
-  row.idKlien = item.idKlien;
-  return row;
-}
-
-function gabungkanAntrian() {
-  STATE.rows = STATE.rows.filter(r => !r.pending).concat(antrian().map(barisDariAntrian));
-}
-
-let sedangKirim = false;
-async function kirimAntrian() {
-  if (sedangKirim || !gasUrlSiap()) return;
-  sedangKirim = true;
-  let adaTerkirim = false;
-  try {
-    for (const item of antrian()) {
-      let res;
-      try {
-        res = await apiPost('simpanInspeksi', { data: Object.assign({}, item.data, { idKlien: item.idKlien }) });
-      } catch (e) {
-        break; // jaringan putus → coba lagi nanti (tombol ⟳, kembali online, atau buka ulang)
-      }
-      // Berhasil atau ditolak validasi server → keluarkan dari antrian
-      setAntrian(antrian().filter(x => x.idKlien !== item.idKlien));
-      if (res.success) {
-        adaTerkirim = true;
-        notif(res.message || 'Terkirim ke spreadsheet.');
-      } else {
-        notif('Ditolak server: ' + res.message, 'error');
-        gabungkanAntrian(); hitungTurunan(); tandaiSemuaKotor();
-      }
-    }
-  } finally {
-    sedangKirim = false;
-    perbaruiSync();
-  }
-  if (adaTerkirim) segarkan(); // ambil nomor baris asli dari server, di latar
+  $('#insight-list').innerHTML = '';
+  $('#pond-grid').innerHTML = '';
 }
 
 /* ── Mulai ── */
 document.addEventListener('DOMContentLoaded', () => {
   temaAwal();
   $('#btn-theme').addEventListener('click', () => setTema(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
-  $('#btn-refresh').addEventListener('click', () => { kirimAntrian(); segarkan({ umumkan: true }); });
+  $('#btn-refresh').addEventListener('click', () => segarkan({ paksa: true }));
   Dashboard.init();
   Laporan.init();
-  Input.init();
   Pengaturan.init();
   navigasi(location.hash.slice(1) || 'dashboard');
 
-  // 1) Tampilkan data terakhir dari browser SEKETIKA (tanpa menunggu server)
+  // 1) Data terakhir dari browser tampil SEKETIKA (tanpa menunggu server)
   const cache = simpanan.get(KUNCI.data);
-  if (cache && cache.d) {
+  if (cache && cache.d && cache.d.headers) {
     STATE.dimuatPada = cache.waktu;
-    STATE.sidik = hashTeks(JSON.stringify([cache.d.headers, cache.d.rows, cache.d.pengaturan, cache.d.modeImpor]));
-    olahData(cache.d);
-    $('#brand-sub').textContent = STATE.pengaturan.judulLokasi;
-    tandaiSemuaKotor();
+    terapkanData(cache.d, sidikData(cache.d));
     perbaruiSync();
   } else {
-    loading(true, 'Mengambil data dari spreadsheet…'); // hanya saat pertama kali dibuka
+    tampilkanKerangka(); // pertama kali: kerangka halus, tanpa layar loading
   }
-  // 2) Segarkan dari server di latar belakang
+  // 2) Segarkan dari server di latar belakang (senyap)
   segarkan({ awal: true });
 
-  // 3) Segarkan otomatis saat tab dibuka lagi (> 1 menit) dan kirim antrian saat kembali online
+  // 3) Segarkan senyap saat tab dibuka lagi (> 1 menit) atau kembali online
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && Date.now() - (STATE.dimuatPada || 0) > 60000) segarkan();
   });
-  window.addEventListener('online', () => { kirimAntrian(); segarkan(); });
+  window.addEventListener('online', () => segarkan());
 });

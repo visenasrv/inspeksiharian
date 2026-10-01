@@ -1,10 +1,9 @@
 # Inspeksi Harian — Pond Charlie Utara PT. PAP
 
-Frontend statis (HTML/CSS/JS) untuk data inspeksi harian pond. Data dibaca dan ditulis ke Google Sheets melalui Google Apps Script (Web App JSON).
+Frontend statis (HTML/CSS/JS) untuk data inspeksi harian pond. Data dibaca dari Google Sheets melalui Google Apps Script (Web App JSON) yang melayani data dari cache.
 
 - **Dashboard**: pH & TSS per pond, penanda di luar batas, kondisi terakhir tiap pond, rekap kerusakan berulang
 - **Laporan**: harian / mingguan / bulanan / rentang tanggal → PDF A4 dengan judul dan tanda tangan supervisor
-- **Input**: inspeksi baru langsung ke sheet respons Google Form
 - **Pengaturan**: judul, penanda tangan, batas mutu, margin PDF (dilindungi PIN)
 
 ## Struktur
@@ -17,7 +16,6 @@ js/util.js        ← tanggal, penyeragaman pond, parser pH/TSS, rekap kerusakan
 js/api.js         ← fetch ke Apps Script
 js/dashboard.js
 js/laporan.js
-js/input.js
 js/pengaturan.js
 js/app.js
 ```

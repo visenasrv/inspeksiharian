@@ -133,7 +133,7 @@ const Laporan = {
 
     const per = this.periode(), rows = this.rows(per), [j1, j2] = this.judul(per), ttd = this.teksTtd();
     $('#lap-info').innerHTML = rows.length
-      ? `<b>${rows.length}</b> entri · ${esc(teksRentang(per.dari, per.sampai, s.jenis !== 'bulanan'))}. Pratinjau di bawah sama dengan isi PDF.${rows.some(r => r.pending) ? ` <span class="badge warn">${rows.filter(r => r.pending).length} entri belum terkirim ke spreadsheet</span>` : ''}`
+      ? `<b>${rows.length}</b> entri · ${esc(teksRentang(per.dari, per.sampai, s.jenis !== 'bulanan'))}. Pratinjau di bawah sama dengan isi PDF.`
       : `Tidak ada data pada ${esc(teksRentang(per.dari, per.sampai))}${s.pond ? ' untuk ' + esc(s.pond) : ''}.`;
 
     const paper = $('#print-area');

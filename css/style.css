@@ -108,7 +108,7 @@ a { color: var(--brand); }
 /* ── Navigasi bawah (ponsel) ── */
 .bottomnav {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  display: grid; grid-template-columns: repeat(3, 1fr);
   background: var(--surface); border-top: 1px solid var(--line);
   padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
 }
@@ -170,9 +170,10 @@ fieldset:disabled { opacity: .55; }
 .btn:disabled { opacity: .6; cursor: progress; }
 
 .filter-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; }
-.filter-bar .chips { grid-column: 1 / -1; }
+.filter-bar .chips, .filter-bar .f-bulan { grid-column: 1 / -1; }
 @media (min-width: 760px) {
-  .filter-bar { grid-template-columns: 160px 160px 200px 1fr; }
+  .filter-bar { grid-template-columns: 190px 150px 150px 180px 1fr; }
+  .filter-bar .f-bulan { grid-column: auto; }
   .filter-bar .chips { grid-column: auto; justify-content: flex-end; }
 }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -306,11 +307,25 @@ fieldset:disabled { opacity: .55; }
 .form-sec { font-size: .82rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--brand); margin: 22px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
 .form-sec:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; flex-wrap: wrap; }
-.prefill-note { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); font-size: .84rem; }
-.batas-live { min-height: 40px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: .84rem; color: var(--muted); }
 .pin-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
 .pin-row .field { width: 200px; }
 #pin-info { margin: 10px 0 0; }
+
+/* ── Kerangka (skeleton) saat data pertama kali dimuat — tanpa layar loading ── */
+.sk {
+  display: block; border-radius: 8px;
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--line) 45%, var(--surface-2) 65%);
+  background-size: 300% 100%; animation: kilau 1.3s ease-in-out infinite;
+}
+.sk.t { height: 12px; margin: 6px 0; }
+.sk.v { height: 30px; width: 55%; margin: 8px 0 6px; }
+.memuat .chart-box, .memuat .table-wrap, .memuat #print-area:empty {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--line) 45%, var(--surface-2) 65%);
+  background-size: 300% 100%; animation: kilau 1.3s ease-in-out infinite; border-radius: 10px;
+}
+.memuat .table-wrap { min-height: 140px; border-color: transparent; }
+.memuat #print-area:empty { min-height: 60vh; }
+@keyframes kilau { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 
 /* ── Loading & toast ── */
 .loading { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: rgba(10, 20, 18, .35); backdrop-filter: blur(2px); }
