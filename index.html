@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inspeksi Harian · Pond Charlie Utara</title>
+  <meta name="description" content="Dashboard, laporan PDF, dan input inspeksi harian Pond Charlie Utara PT. PAP">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231f5e54'/%3E%3Cpath d='M6 20c3 0 3-3 6-3s3 3 6 3 3-3 6-3' stroke='%23f0a92a' stroke-width='2.6' fill='none' stroke-linecap='round'/%3E%3Cpath d='M6 13c3 0 3-3 6-3s3 3 6 3 3-3 6-3' stroke='%23fff' stroke-width='2.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+  <!-- Sambungan awal ke server API & CDN (mempercepat permintaan pertama) -->
+  <link rel="preconnect" href="https://script.google.com">
+  <link rel="preconnect" href="https://script.googleusercontent.com">
+  <link rel="dns-prefetch" href="https://script.googleusercontent.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ══════════ HEADER ══════════ -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><i class="bi bi-water"></i></div>
+        <div class="brand-text">
+          <strong>Inspeksi Harian</strong>
+          <span id="brand-sub">Pond Charlie Utara · PT. PAP</span>
+        </div>
+      </div>
+      <nav class="tabs" aria-label="Menu utama">
+        <a href="#dashboard" data-nav="dashboard" class="tab"><i class="bi bi-activity"></i> Dashboard</a>
+        <a href="#laporan" data-nav="laporan" class="tab"><i class="bi bi-file-earmark-text"></i> Laporan</a>
+        <a href="#input" data-nav="input" class="tab"><i class="bi bi-plus-square"></i> Input</a>
+        <a href="#pengaturan" data-nav="pengaturan" class="tab"><i class="bi bi-sliders"></i> Pengaturan</a>
+      </nav>
+      <div class="topbar-actions">
+        <span class="sync" id="sync-status" title="Waktu data terakhir dimuat">Memuat…</span>
+        <button class="icon-btn" id="btn-refresh" title="Muat ulang data" aria-label="Muat ulang data"><i class="bi bi-arrow-clockwise"></i></button>
+        <button class="icon-btn" id="btn-theme" title="Mode gelap / terang" aria-label="Ganti tema"><i class="bi bi-moon-stars"></i></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- ══════════ DASHBOARD ══════════ -->
+    <section id="sec-dashboard" class="section" data-section="dashboard">
+      <div class="page-head">
+        <div>
+          <h1>Monitoring pond</h1>
+          <p class="muted" id="dash-periode">—</p>
+        </div>
+      </div>
+
+      <div class="card filter-bar">
+        <div class="field">
+          <label for="dash-dari">Dari</label>
+          <input type="date" id="dash-dari">
+        </div>
+        <div class="field">
+          <label for="dash-sampai">Sampai</label>
+          <input type="date" id="dash-sampai">
+        </div>
+        <div class="field">
+          <label for="dash-pond">Pond</label>
+          <select id="dash-pond"><option value="">Semua pond</option></select>
+        </div>
+        <div class="chips" role="group" aria-label="Rentang cepat">
+          <button class="chip" data-range="7">7 hari</button>
+          <button class="chip" data-range="30">30 hari</button>
+          <button class="chip" data-range="bulan">Bulan ini</button>
+          <button class="chip" data-range="semua">Semua</button>
+        </div>
+      </div>
+
+      <div class="kpi-grid" id="kpi-grid"></div>
+
+      <div class="card insight" id="insight-card">
+        <div class="card-title"><i class="bi bi-lightbulb"></i> Ringkasan otomatis</div>
+        <ul id="insight-list" class="insight-list"></ul>
+      </div>
+
+      <h2 class="h-sec">Kondisi terakhir per pond</h2>
+      <div class="pond-grid" id="pond-grid"></div>
+
+      <div class="chart-grid">
+        <div class="card">
+          <div class="card-title"><i class="bi bi-droplet-half"></i> pH harian per pond <span class="muted small" id="batas-ph-label"></span></div>
+          <div class="chart-box"><canvas id="chart-ph"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><i class="bi bi-funnel"></i> TSS harian per pond (mg/L) <span class="muted small" id="batas-tss-label"></span></div>
+          <div class="chart-box"><canvas id="chart-tss"></canvas></div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title"><i class="bi bi-exclamation-triangle"></i> Sampel di luar batas</div>
+          <div class="table-wrap"><table class="tbl" id="tbl-luar"></table></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><i class="bi bi-tools"></i> Kerusakan berulang</div>
+          <div class="table-wrap"><table class="tbl" id="tbl-rusak"></table></div>
+          <p class="muted small note" id="rusak-note"></p>
+        </div>
+      </div>
+
+      <details class="card details" id="cek-card">
+        <summary><i class="bi bi-question-circle"></i> Isian sampling yang tidak terbaca <span class="badge" id="cek-count">0</span></summary>
+        <p class="muted small">Isian kolom "Hasil Sampling Enviro" yang ada angkanya tetapi tidak bisa dipisahkan menjadi pH dan TSS. Tidak ikut dihitung di grafik — perbaiki langsung di spreadsheet bila perlu.</p>
+        <div class="table-wrap"><table class="tbl" id="tbl-cek"></table></div>
+      </details>
+    </section>
+
+    <!-- ══════════ LAPORAN ══════════ -->
+    <section id="sec-laporan" class="section" data-section="laporan">
+      <div class="page-head">
+        <div>
+          <h1>Laporan inspeksi</h1>
+          <p class="muted">Pilih periode, periksa pratinjau, lalu unduh PDF A4 atau cetak langsung.</p>
+        </div>
+      </div>
+
+      <div class="card lap-controls">
+        <div class="seg" role="tablist" aria-label="Jenis laporan">
+          <button class="seg-btn" data-jenis="harian">Harian</button>
+          <button class="seg-btn" data-jenis="mingguan">Mingguan</button>
+          <button class="seg-btn" data-jenis="bulanan">Bulanan</button>
+          <button class="seg-btn" data-jenis="rentang">Rentang tanggal</button>
+        </div>
+
+        <div class="lap-row">
+          <div class="field" data-for="harian mingguan">
+            <label for="lap-tgl" id="lap-tgl-label">Tanggal</label>
+            <input type="date" id="lap-tgl">
+          </div>
+          <div class="field" data-for="bulanan">
+            <label for="lap-bulan">Bulan</label>
+            <select id="lap-bulan"></select>
+          </div>
+          <div class="field" data-for="bulanan">
+            <label for="lap-tahun">Tahun</label>
+            <select id="lap-tahun"></select>
+          </div>
+          <div class="field" data-for="rentang">
+            <label for="lap-dari">Dari</label>
+            <input type="date" id="lap-dari">
+          </div>
+          <div class="field" data-for="rentang">
+            <label for="lap-sampai">Sampai</label>
+            <input type="date" id="lap-sampai">
+          </div>
+          <div class="field">
+            <label for="lap-pond">Pond</label>
+            <select id="lap-pond"><option value="">Semua pond</option></select>
+          </div>
+          <div class="field grow">
+            <label for="lap-cari">Cari kata</label>
+            <input type="search" id="lap-cari" placeholder="mis. pintu air, LV 21, cuti…">
+          </div>
+        </div>
+
+        <div class="lap-row lap-print">
+          <div class="field">
+            <label for="lap-orientasi">Kertas A4</label>
+            <select id="lap-orientasi">
+              <option value="landscape">Mendatar (landscape)</option>
+              <option value="portrait">Tegak (portrait)</option>
+            </select>
+          </div>
+          <div class="field narrow">
+            <label for="lap-margin">Margin (mm)</label>
+            <input type="number" id="lap-margin" min="3" max="15" step="0.5" value="6">
+          </div>
+          <div class="lap-buttons">
+            <button class="btn" id="btn-cetak"><i class="bi bi-printer"></i> Cetak</button>
+            <button class="btn btn-primary" id="btn-pdf"><i class="bi bi-file-earmark-pdf"></i> Unduh PDF</button>
+          </div>
+        </div>
+        <p class="muted small" id="lap-info"></p>
+      </div>
+
+      <div class="paper-scroll">
+        <div class="paper" id="print-area"></div>
+      </div>
+    </section>
+
+    <!-- ══════════ INPUT ══════════ -->
+    <section id="sec-input" class="section" data-section="input">
+      <div class="page-head">
+        <div>
+          <h1>Input inspeksi</h1>
+          <p class="muted" id="input-sub">Tersimpan langsung ke sheet yang sama dengan Google Form.</p>
+        </div>
+      </div>
+
+      <form class="card form" id="form-input" novalidate>
+        <div class="form-grid">
+          <div class="field">
+            <label for="in-tanggal">Tanggal <span class="req">*</span></label>
+            <input type="date" id="in-tanggal" required>
+          </div>
+          <div class="field">
+            <label for="in-pond">Pond <span class="req">*</span></label>
+            <select id="in-pond" required></select>
+          </div>
+          <div class="field" id="in-pond-lain-wrap" hidden>
+            <label for="in-pond-lain">Nama pond lain <span class="req">*</span></label>
+            <input type="text" id="in-pond-lain" maxlength="60">
+          </div>
+        </div>
+        <p class="prefill-note" id="prefill-note" hidden></p>
+
+        <h3 class="form-sec">Kendaraan &amp; peralatan</h3>
+        <div class="form-grid" id="in-peralatan"></div>
+
+        <h3 class="form-sec">Hasil sampling enviro</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label for="in-ph">pH</label>
+            <input type="number" id="in-ph" step="0.01" min="0" max="14" inputmode="decimal" placeholder="mis. 7.12">
+          </div>
+          <div class="field">
+            <label for="in-tss">TSS (mg/L)</label>
+            <input type="number" id="in-tss" step="0.1" min="0" inputmode="decimal" placeholder="mis. 45">
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <div class="batas-live" id="batas-live">Isi pH / TSS untuk melihat status batas.</div>
+          </div>
+        </div>
+
+        <h3 class="form-sec">Catatan</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label for="in-pekerja" id="lbl-pekerja">Pekerja yang tidak masuk</label>
+            <input type="text" id="in-pekerja" maxlength="120" placeholder="- bila lengkap">
+          </div>
+          <div class="field span-2">
+            <label for="in-keterangan" id="lbl-keterangan">Keterangan jika ada yang rusak atau tidak standar</label>
+            <textarea id="in-keterangan" rows="2" maxlength="500" placeholder="- bila tidak ada"></textarea>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="reset" class="btn">Kosongkan</button>
+          <button type="submit" class="btn btn-primary" id="btn-simpan"><i class="bi bi-cloud-upload"></i> Simpan inspeksi</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ══════════ PENGATURAN ══════════ -->
+    <section id="sec-pengaturan" class="section" data-section="pengaturan">
+      <div class="page-head">
+        <div>
+          <h1>Pengaturan</h1>
+          <p class="muted">Tersimpan di sheet "Pengaturan". Perlu PIN admin untuk mengubah.</p>
+        </div>
+      </div>
+
+      <div class="card" id="pin-card">
+        <div class="pin-row">
+          <div class="field">
+            <label for="set-pin">PIN admin</label>
+            <input type="password" id="set-pin" autocomplete="off" inputmode="numeric">
+          </div>
+          <button class="btn btn-primary" id="btn-pin"><i class="bi bi-unlock"></i> Buka pengaturan</button>
+        </div>
+        <p class="muted small" id="pin-info"></p>
+      </div>
+
+      <form class="card form" id="form-set" novalidate>
+        <fieldset id="set-fields" disabled>
+          <h3 class="form-sec">Laporan PDF</h3>
+          <div class="form-grid">
+            <div class="field span-2"><label for="set-judulLokasi">Baris judul lokasi</label><input type="text" id="set-judulLokasi" maxlength="120"></div>
+            <div class="field"><label for="set-jabatanTtd">Jabatan penanda tangan</label><input type="text" id="set-jabatanTtd" maxlength="120"></div>
+            <div class="field"><label for="set-namaTtd">Nama penanda tangan</label><input type="text" id="set-namaTtd" maxlength="120"></div>
+            <div class="field"><label for="set-orientasiPdf">Orientasi bawaan</label>
+              <select id="set-orientasiPdf"><option value="landscape">Mendatar (landscape)</option><option value="portrait">Tegak (portrait)</option></select></div>
+            <div class="field"><label for="set-marginPdf">Margin bawaan (mm)</label><input type="number" id="set-marginPdf" min="3" max="15" step="0.5"></div>
+          </div>
+          <h3 class="form-sec">Batas mutu</h3>
+          <div class="form-grid">
+            <div class="field"><label for="set-phMin">pH minimum</label><input type="number" id="set-phMin" step="0.1" min="0" max="14"></div>
+            <div class="field"><label for="set-phMax">pH maksimum</label><input type="number" id="set-phMax" step="0.1" min="0" max="14"></div>
+            <div class="field"><label for="set-tssMax">TSS maksimum (mg/L)</label><input type="number" id="set-tssMax" step="1" min="1"></div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Simpan pengaturan</button>
+          </div>
+        </fieldset>
+      </form>
+    </section>
+  </main>
+
+  <!-- Navigasi bawah (ponsel) -->
+  <nav class="bottomnav" aria-label="Menu utama ponsel">
+    <a href="#dashboard" data-nav="dashboard"><i class="bi bi-activity"></i><span>Dashboard</span></a>
+    <a href="#laporan" data-nav="laporan"><i class="bi bi-file-earmark-text"></i><span>Laporan</span></a>
+    <a href="#input" data-nav="input"><i class="bi bi-plus-square"></i><span>Input</span></a>
+    <a href="#pengaturan" data-nav="pengaturan"><i class="bi bi-sliders"></i><span>Atur</span></a>
+  </nav>
+
+  <div class="loading" id="loading" hidden>
+    <div class="loading-box"><div class="spinner"></div><span id="loading-text">Memuat data…</span></div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <!-- Library -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.js"></script>
+
+  <!-- Aplikasi -->
+  <script src="js/config.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/laporan.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/pengaturan.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
