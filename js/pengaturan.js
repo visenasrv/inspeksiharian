@@ -1,51 +1,40 @@
 /* ============================================
-   PENGATURAN — judul & tanda tangan laporan, batas mutu (dilindungi PIN)
+   PENGATURAN — logo, judul & tanda tangan laporan, batas mutu (khusus admin)
    ============================================ */
 
 const KUNCI_SET = ['judulLokasi', 'jabatanTtd', 'namaTtd', 'orientasiPdf', 'marginPdf', 'phMin', 'phMax', 'tssMax'];
 
 const Pengaturan = {
-  pin: null,
-
   init() {
-    $('#btn-pin').addEventListener('click', () => this.buka());
-    $('#set-pin').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); this.buka(); } });
     $('#form-set').addEventListener('submit', e => this.simpan(e));
+    $('#set-logo').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) this.gantiLogo(f); });
+    $('#btn-hapus-logo').addEventListener('click', () => this.hapusLogo());
   },
 
   isi() {
-    const p = STATE.pengaturan;
+    const p = STATE.pengaturan, admin = Admin.aktif();
     KUNCI_SET.forEach(k => { const el = $(`#set-${k}`); if (el) el.value = p[k] ?? ''; });
-    $('#pin-info').innerHTML = p.pinDiatur
-      ? (this.pin ? '<span class="badge ok"><i class="bi bi-unlock"></i> Terbuka</span> Perubahan langsung dipakai di dashboard dan laporan.' : 'Masukkan PIN admin untuk mengubah pengaturan.')
-      : '<span class="badge warn">PIN belum diatur</span> Buka spreadsheet → sheet <b>Pengaturan</b> → isi kolom nilai pada baris <b>pinAdmin</b>. Sementara itu pengaturan bisa diubah langsung di sheet tersebut.';
-  },
+    $('#set-fields').disabled = !admin;
+    $('#btn-hapus-logo').disabled = !STATE.logo;
+    Logo.tampilkan();
 
-  async buka() {
-    const pin = $('#set-pin').value.trim();
-    if (!pin) { notif('Masukkan PIN.', 'error'); return; }
-    const btn = $('#btn-pin'), label = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner sm"></span> Memeriksa…'; // tanpa layar loading penuh
-    try {
-      const res = await apiPost('cekPin', { pin });
-      if (!res.success) throw new Error(res.message);
-      this.pin = pin;
-      $('#set-fields').disabled = false;
-      notif('Pengaturan terbuka.');
-      this.isi();
-    } catch (err) {
-      notif(err.message, 'error');
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = label;
-    }
+    const kartu = $('#admin-card');
+    kartu.classList.toggle('aktif', admin);
+    kartu.innerHTML = admin
+      ? `<div class="ikon"><i class="bi bi-person-check-fill"></i></div>
+         <div class="teks"><b>Anda masuk sebagai admin</b><span>Sesi berlaku sampai ${esc(Admin.jamHabis())}. Perubahan langsung dipakai di dashboard dan laporan.</span></div>
+         <button type="button" class="btn" id="btn-keluar"><i class="bi bi-box-arrow-right"></i> Keluar</button>`
+      : `<div class="ikon"><i class="bi bi-lock"></i></div>
+         <div class="teks"><b>Mode tamu</b><span>Masuk sebagai admin untuk mengubah pengaturan, mengganti logo, serta mengunduh dan mencetak laporan.${p.pinDiatur ? '' : ' PIN admin diatur di spreadsheet → sheet <b>Pengaturan</b> → baris <b>pinAdmin</b>.'}</span></div>
+         <button type="button" class="btn btn-primary" data-masuk-admin><i class="bi bi-box-arrow-in-right"></i> Masuk admin</button>`;
+    const keluar = $('#btn-keluar');
+    if (keluar) keluar.addEventListener('click', () => Admin.keluar());
   },
 
   /** Optimistic: langsung diterapkan ke dashboard & laporan, disimpan ke server di latar */
   async simpan(e) {
     e.preventDefault();
-    if (!this.pin) { notif('Buka dengan PIN terlebih dahulu.', 'error'); return; }
+    if (!Admin.wajib()) return;
     const data = {};
     KUNCI_SET.forEach(k => { data[k] = $(`#set-${k}`).value.trim(); });
     if (Number(data.phMin) >= Number(data.phMax)) { notif('pH minimum harus lebih kecil dari pH maksimum.', 'error'); return; }
@@ -59,7 +48,7 @@ const Pengaturan = {
     notif('Pengaturan diterapkan. Menyimpan ke spreadsheet…');
 
     try {
-      const res = await apiPost('simpanPengaturan', { pin: this.pin, data });
+      const res = await apiPost('simpanPengaturan', { token: Admin.token(), data });
       if (!res.success) throw new Error(res.message);
       notif('Pengaturan tersimpan di spreadsheet.');
       segarkan(); // sinkronkan cache lokal di latar
@@ -68,6 +57,53 @@ const Pengaturan = {
       $('#brand-sub').textContent = lama.judulLokasi;
       tandaiSemuaKotor();
       notif('Gagal menyimpan, pengaturan dikembalikan: ' + err.message, 'error');
+      Admin.tanganiGalat(err);
+    }
+  },
+
+  /** Logo: langsung tampil, unggah di latar, kembalikan bila gagal */
+  async gantiLogo(file) {
+    if (!Admin.wajib()) return;
+    const lama = STATE.logo ? Object.assign({}, STATE.logo) : null;
+    const pv = $('#logo-preview');
+    try {
+      pv.classList.add('memuat');
+      const dataUrl = await Logo.olahFile(file);
+      await Logo.set(dataUrl, 'lokal');
+      notif('Logo diterapkan. Menyimpan ke spreadsheet…');
+      const res = await apiPost('simpanLogo', { token: Admin.token(), logo: dataUrl });
+      if (!res.success) throw new Error(res.message);
+      await Logo.set(dataUrl, res.data.versi);
+      STATE.pengaturan.logoVersi = res.data.versi;
+      notif('Logo tersimpan.');
+      segarkan();
+    } catch (err) {
+      await Logo.set(lama ? lama.dataUrl : '', lama ? lama.versi : '');
+      notif('Gagal menyimpan logo: ' + err.message, 'error');
+      Admin.tanganiGalat(err);
+    } finally {
+      pv.classList.remove('memuat');
+      $('#btn-hapus-logo').disabled = !STATE.logo;
+    }
+  },
+
+  async hapusLogo() {
+    if (!Admin.wajib() || !STATE.logo) return;
+    if (!confirm('Hapus logo dari aplikasi dan semua laporan?')) return;
+    const lama = Object.assign({}, STATE.logo);
+    await Logo.set('', '');
+    $('#btn-hapus-logo').disabled = true;
+    try {
+      const res = await apiPost('simpanLogo', { token: Admin.token(), logo: '' });
+      if (!res.success) throw new Error(res.message);
+      STATE.pengaturan.logoVersi = '';
+      notif('Logo dihapus.');
+      segarkan();
+    } catch (err) {
+      await Logo.set(lama.dataUrl, lama.versi);
+      $('#btn-hapus-logo').disabled = false;
+      notif('Gagal menghapus logo: ' + err.message, 'error');
+      Admin.tanganiGalat(err);
     }
   }
 };

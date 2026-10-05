@@ -40,7 +40,7 @@
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
-        <div class="brand-mark" aria-hidden="true"><i class="bi bi-water"></i></div>
+        <div class="brand-mark" id="brand-mark" aria-hidden="true"><i class="bi bi-water"></i></div>
         <div class="brand-text">
           <strong>Inspeksi Harian</strong>
           <span id="brand-sub">Pond Charlie Utara · PT. PAP</span>
@@ -55,6 +55,7 @@
         <span class="sync" id="sync-status" title="Jumlah entri · waktu data terakhir dimuat"></span>
         <button class="icon-btn" id="btn-refresh" title="Muat ulang data" aria-label="Muat ulang data"><i class="bi bi-arrow-clockwise"></i></button>
         <button class="icon-btn" id="btn-theme" title="Mode gelap / terang" aria-label="Ganti tema"><i class="bi bi-moon-stars"></i></button>
+        <button class="admin-btn" id="btn-admin" title="Masuk sebagai admin" aria-label="Admin"><i class="bi bi-person-lock"></i><span>Admin</span></button>
       </div>
     </div>
   </header>
@@ -68,6 +69,9 @@
           <h1>Monitoring pond</h1>
           <p class="muted" id="dash-periode">—</p>
         </div>
+        <button class="btn btn-primary admin-only" id="btn-unduh-dash" title="Unduh laporan monitoring sesuai filter di bawah">
+          <i class="bi bi-file-earmark-arrow-down"></i> <span>Unduh laporan</span>
+        </button>
       </div>
 
       <div class="card filter-bar">
@@ -195,9 +199,14 @@
             <label for="lap-margin">Margin (mm)</label>
             <input type="number" id="lap-margin" min="3" max="15" step="0.5" value="6">
           </div>
-          <div class="lap-buttons">
+          <div class="lap-buttons admin-only">
             <button class="btn" id="btn-cetak"><i class="bi bi-printer"></i> Cetak</button>
             <button class="btn btn-primary" id="btn-pdf"><i class="bi bi-file-earmark-pdf"></i> Unduh PDF</button>
+          </div>
+          <div class="kunci-note tamu-only">
+            <i class="bi bi-lock"></i>
+            <span>Unduh PDF &amp; cetak khusus admin.</span>
+            <button type="button" class="btn btn-sm" data-masuk-admin>Masuk admin</button>
           </div>
         </div>
         <p class="muted small" id="lap-info"></p>
@@ -213,23 +222,27 @@
       <div class="page-head">
         <div>
           <h1>Pengaturan</h1>
-          <p class="muted">Tersimpan di sheet "Pengaturan". Perlu PIN admin untuk mengubah.</p>
+          <p class="muted">Tersimpan di spreadsheet. Hanya admin yang dapat mengubah.</p>
         </div>
       </div>
 
-      <div class="card" id="pin-card">
-        <div class="pin-row">
-          <div class="field">
-            <label for="set-pin">PIN admin</label>
-            <input type="password" id="set-pin" autocomplete="off" inputmode="numeric">
-          </div>
-          <button class="btn btn-primary" id="btn-pin"><i class="bi bi-unlock"></i> Buka pengaturan</button>
-        </div>
-        <p class="muted small" id="pin-info"></p>
-      </div>
+      <div class="card admin-card" id="admin-card"></div>
 
       <form class="card form" id="form-set" novalidate>
         <fieldset id="set-fields" disabled>
+          <h3 class="form-sec">Logo</h3>
+          <div class="logo-row">
+            <div class="logo-preview" id="logo-preview"><span>Belum ada logo</span></div>
+            <div class="logo-aksi">
+              <div class="logo-tombol">
+                <label class="btn" for="set-logo" id="lbl-logo"><i class="bi bi-upload"></i> Pilih gambar</label>
+                <input type="file" id="set-logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" class="sr-only">
+                <button type="button" class="btn" id="btn-hapus-logo"><i class="bi bi-trash3"></i> Hapus</button>
+              </div>
+              <p class="muted small">PNG, JPG, atau SVG. Gambar dikecilkan otomatis. Logo berlatar transparan (PNG) paling rapi. Tampil di aplikasi dan di semua PDF.</p>
+            </div>
+          </div>
+
           <h3 class="form-sec">Laporan PDF</h3>
           <div class="form-grid">
             <div class="field span-2"><label for="set-judulLokasi">Baris judul lokasi</label><input type="text" id="set-judulLokasi" maxlength="120"></div>
@@ -260,6 +273,27 @@
     <a href="#pengaturan" data-nav="pengaturan"><i class="bi bi-sliders"></i><span>Pengaturan</span></a>
   </nav>
 
+  <!-- Dialog admin -->
+  <dialog class="dlg" id="dlg-admin" aria-labelledby="dlg-admin-judul">
+    <form method="dialog" class="dlg-box" id="form-admin" novalidate>
+      <div class="dlg-ikon"><i class="bi bi-shield-lock"></i></div>
+      <h2 id="dlg-admin-judul">Masuk admin</h2>
+      <p class="muted small" id="dlg-admin-teks">Admin dapat mengunduh laporan, mencetak, mengubah pengaturan, dan mengganti logo.</p>
+      <div class="field" id="dlg-pin-wrap">
+        <label for="admin-pin">PIN admin</label>
+        <input type="password" id="admin-pin" inputmode="numeric" autocomplete="current-password" maxlength="40">
+      </div>
+      <p class="dlg-galat" id="dlg-galat" role="alert"></p>
+      <div class="dlg-aksi">
+        <button type="button" class="btn" id="dlg-batal">Batal</button>
+        <button type="submit" class="btn btn-primary" id="dlg-ok"><i class="bi bi-box-arrow-in-right"></i> Masuk</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Hanya muncul bila tamu mencoba mencetak (Ctrl+P) -->
+  <div class="cetak-terkunci">Laporan hanya dapat dicetak oleh admin.</div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <!-- Library -->
@@ -270,6 +304,8 @@
   <script src="js/api.js" defer></script>
   <script src="js/dashboard.js" defer></script>
   <script src="js/laporan.js" defer></script>
+  <script src="js/laporan-dashboard.js" defer></script>
+  <script src="js/admin.js" defer></script>
   <script src="js/pengaturan.js" defer></script>
   <script src="js/app.js" defer></script>
 </body>

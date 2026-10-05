@@ -144,9 +144,13 @@ const Laporan = {
     const head = ['No'].concat(STATE.headers).map(h => `<th>${esc(h)}</th>`).join('');
     const body = rows.map((r, i) => `<tr><td class="c">${i + 1}</td>${this.sel(r).map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('');
 
+    const logo = STATE.logo ? `<img src="${STATE.logo.dataUrl}" alt="">` : '';
     paper.innerHTML = `<div class="rpt">
-      <div class="rpt-title">${esc(j1)}</div>
-      <div class="rpt-title">${esc(j2)}</div>
+      <div class="rpt-kop">
+        <div class="rpt-logo">${logo}</div>
+        <div><div class="rpt-title">${esc(j1)}</div><div class="rpt-title">${esc(j2)}</div></div>
+        <div></div>
+      </div>
       <div class="rpt-sub">${esc(this.subjudul(per))}</div>
       <table class="rpt-tbl"><colgroup>${cols}</colgroup><thead><tr>${head}</tr></thead>
         <tbody>${body || `<tr><td colspan="20" class="c" style="padding:8pt">Tidak ada data inspeksi pada periode ini.</td></tr>`}</tbody></table>
@@ -162,7 +166,7 @@ const Laporan = {
   },
 
   async unduhPdf() {
-    if (!STATE.siap) return;
+    if (!STATE.siap || !Admin.wajib()) return;
     const btn = $('#btn-pdf'), label = btn.innerHTML;
     btn.disabled = true;
     try {
@@ -179,8 +183,15 @@ const Laporan = {
       const per = this.periode(), rows = this.rows(per), [j1, j2] = this.judul(per), ttd = this.teksTtd();
       const besar = o === 'landscape';
 
-      // ── Judul (halaman 1) ──
-      let y = m + 4;
+      // ── Logo (kiri) + judul (tengah) di halaman 1 ──
+      let y = m + 4, bawahLogo = 0;
+      if (STATE.logo) {
+        const tinggi = 13, lebarMaks = 22;
+        let lw = tinggi * STATE.logo.w / STATE.logo.h, lh = tinggi;
+        if (lw > lebarMaks) { lh = lh * lebarMaks / lw; lw = lebarMaks; }
+        doc.addImage(STATE.logo.dataUrl, 'PNG', m, m + (tinggi - lh) / 2, lw, lh);
+        bawahLogo = m + tinggi;
+      }
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(besar ? 11 : 10);
       doc.text(j1, W / 2, y, { align: 'center' });
@@ -192,7 +203,7 @@ const Laporan = {
       doc.setTextColor(60);
       doc.text(this.subjudul(per), W / 2, y, { align: 'center', maxWidth: lebar });
       doc.setTextColor(0);
-      y += 2.5;
+      y = Math.max(y + 2.5, bawahLogo + 2);
 
       // ── Tabel ──
       const fs = besar ? 6.4 : 5.2;
@@ -256,6 +267,7 @@ const Laporan = {
   },
 
   cetak() {
+    if (!Admin.wajib()) return;
     const o = this.st.orientasi === 'portrait' ? 'portrait' : 'landscape';
     let st = $('#page-style');
     if (!st) { st = document.createElement('style'); st.id = 'page-style'; document.head.appendChild(st); }

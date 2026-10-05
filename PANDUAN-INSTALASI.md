@@ -22,7 +22,7 @@ Data tetap di sheet respons Google Form yang sudah ada. Google Form lama tetap b
    - Di dropdown fungsi (sebelah tombol ▶), pilih **`setupAplikasi`** → klik **▶ Run**.
    - Klik **Review permissions** → pilih akun → **Advanced** → **Go to … (unsafe)** → **Allow**.
    - Di **Execution log** harus muncul ✅ nama spreadsheet dan jumlah baris data.
-5. Kembali ke spreadsheet. Sekarang ada sheet baru **Pengaturan**. Isi kolom **nilai** pada baris **`pinAdmin`** dengan PIN pilihan Bapak (mis. `2468`). PIN ini dipakai untuk membuka menu Pengaturan di aplikasi.
+5. Kembali ke spreadsheet. Sekarang ada sheet baru **Pengaturan**. Isi kolom **nilai** pada baris **`pinAdmin`** dengan PIN pilihan Bapak (mis. `2468`). PIN ini dipakai untuk **masuk sebagai admin** di aplikasi (tombol **Masuk** di kanan atas).
 6. Kembali ke Apps Script → **Deploy → New deployment**:
    - Klik ikon ⚙️ → pilih **Web app**
    - **Execute as:** `Me`
@@ -30,7 +30,14 @@ Data tetap di sheet respons Google Form yang sudah ada. Google Form lama tetap b
    - Klik **Deploy** → **salin URL** yang berakhiran **`/exec`**.
 7. Uji: buka `URL_EXEC?action=ping` di browser. Harus tampil `{"success":true,"message":"API Inspeksi Harian aktif",...}`.
 
-### Memperbarui dari versi sebelumnya (wajib untuk versi 2.0)
+### Memperbarui ke versi 3.0 (admin, unduh laporan dashboard, logo)
+
+1. Tempel `Kode.gs` versi 3.0, lalu simpan (Ctrl+S).
+2. **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy.** URL `/exec` tetap sama.
+3. Ganti isi repo GitHub dengan ZIP frontend terbaru (ada file baru `js/admin.js` dan `js/laporan-dashboard.js`), isi lagi `GAS_URL`, lalu push.
+4. Pastikan baris `pinAdmin` di sheet **Pengaturan** sudah terisi. Sheet tersembunyi **Logo** akan dibuat otomatis saat logo pertama kali diunggah.
+
+### Memperbarui dari versi 1.x ke 2.0
 
 1. Tempel `Kode.gs` versi baru, lalu simpan.
 2. Jalankan **`setupAplikasi`** sekali lagi. Langkah ini memasang pemicu `perbaruiCache` (tiap 5 menit) dan mengisi cache pertama kali. Cek di menu **Pemicu (ikon jam)** di kiri editor: harus ada 1 pemicu `perbaruiCache`.
@@ -133,9 +140,19 @@ Bila tampilan belum berubah, tekan **Ctrl+Shift+R**.
 
 | Menu | Fungsi |
 |---|---|
-| **Dashboard** | Grafik pH & TSS per pond, sampel di luar batas, kondisi terakhir tiap pond, kerusakan yang berulang |
-| **Laporan** | Pilih Harian / Mingguan (Senin–Minggu) / Bulanan / Rentang tanggal, filter pond & kata kunci → **Unduh PDF** (A4) atau **Cetak** |
-| **Pengaturan** | Ubah judul lokasi, nama & jabatan penanda tangan, batas pH/TSS, margin & orientasi PDF (perlu PIN) |
+| **Dashboard** | Grafik pH & TSS per pond, sampel di luar batas, kondisi terakhir tiap pond, kerusakan yang berulang. Admin: tombol **Unduh laporan** → PDF A4 berisi ringkasan, tabel, grafik, dan tanda tangan supervisor sesuai filter yang sedang dipilih |
+| **Laporan** | Pilih Harian / Mingguan (Senin–Minggu) / Bulanan / Rentang tanggal, filter pond & kata kunci. Admin: **Unduh PDF** (A4) atau **Cetak** |
+| **Pengaturan** | Admin: unggah/hapus **logo**, ubah judul lokasi, nama & jabatan penanda tangan, batas pH/TSS, margin & orientasi PDF |
+
+**Mode admin:**
+- Klik **Masuk** di kanan atas, lalu ketik PIN admin. Tombol berubah menjadi **Admin** (kuning).
+- Sesi berlaku **12 jam** di perangkat itu. PIN tidak disimpan di perangkat; yang disimpan hanya kunci sesi dari server.
+- Mengganti PIN di sheet Pengaturan otomatis membatalkan semua sesi admin yang sedang aktif (paling lambat ±10 menit).
+- Setelah 5 kali PIN salah, login dikunci 10 menit.
+- Untuk keluar: klik tombol **Admin** → **Keluar**. Selalu keluar bila memakai perangkat orang lain.
+- Tamu tetap bisa melihat dashboard dan pratinjau laporan, tetapi tidak bisa mengunduh atau mencetak, termasuk lewat Ctrl+P.
+
+**Logo:** unggah di Pengaturan (PNG/JPG/SVG). Gambar otomatis dikecilkan, lalu tampil di header aplikasi, PDF laporan inspeksi, dan PDF laporan dashboard. Logo PNG berlatar transparan memberi hasil paling rapi.
 
 **Kecepatan:**
 - **Server:** setiap 5 menit, pemicu `perbaruiCache` membaca spreadsheet dan menyiapkan data dalam bentuk jadi di cache Apps Script. Permintaan dari aplikasi langsung dilayani dari cache tanpa membuka spreadsheet, sehingga jauh lebih cepat.
@@ -148,7 +165,7 @@ Bila tampilan belum berubah, tekan **Ctrl+Shift+R**.
 
 ## Hal yang perlu diketahui
 
-- **Akses publik.** Dengan "Who has access: Anyone", siapa pun yang tahu alamat situs bisa melihat data (aplikasi ini hanya membaca data). Pengaturan tetap terkunci PIN.
+- **Akses publik.** Dengan "Who has access: Anyone", siapa pun yang tahu alamat situs bisa melihat data di dashboard. Mengubah pengaturan dan logo dicek di server (wajib sesi admin yang sah). Pembatasan unduh/cetak berlaku di aplikasi: tamu tidak melihat tombolnya dan tidak bisa mencetak. Namun, karena datanya memang terlihat di layar, ini bukan pengaman data yang mutlak.
 - **Batas mutu bawaan**: pH 6–9 dan TSS ≤ 200 mg/L. Ini nilai awal — sesuaikan dengan baku mutu yang berlaku di lokasi lewat menu Pengaturan.
 - **Nama pond** diseragamkan otomatis ("Uppar rangkok", "SLANTING", "Bemgkoang" → Upper Rangkok, Selanting, Bengkoang). Daftar kata kuncinya ada di `js/config.js` (`POND_ALIAS`). Data asli di sheet tidak diubah.
 - Ada 1 entri bernama **"Candra"** (11 April 2026) yang isinya mirip Bengkoang. Aplikasi menampilkannya apa adanya. Bila memang Bengkoang, perbaiki di sheet atau tambahkan `'candra'` ke kunci Bengkoang di `config.js`.
@@ -164,6 +181,9 @@ Bila tampilan belum berubah, tekan **Ctrl+Shift+R**.
 | "Server tidak mengirim JSON" | Deploy belum **Anyone**, atau URL bukan `/exec` | Ulangi langkah A6 |
 | Perubahan Kode.gs tidak berlaku | Deployment belum diperbarui | Manage deployments → Edit → New version |
 | "PIN admin belum diatur" | Baris `pinAdmin` di sheet Pengaturan kosong | Isi PIN di sheet Pengaturan |
+| "Terlalu banyak percobaan PIN salah" | 5 kali PIN salah | Tunggu 10 menit, lalu coba lagi |
+| Tiba-tiba keluar dari mode admin | Sesi 12 jam habis, atau PIN diganti | Masuk lagi dengan PIN terbaru |
+| Tombol Unduh/Cetak tidak terlihat | Belum masuk sebagai admin | Klik **Masuk** di kanan atas |
 | Situs GitHub 404 | `index.html` tidak di root repo | Push ulang dari folder `inspeksi-harian` |
 | Data baru dari Google Form belum muncul | Cache browser, atau jeda rumus impor | Klik tombol ⟳ di kanan atas; untuk IMPORTDATA tunggu hingga ±1 jam |
 | "Data impor … belum siap (A1: #REF!)" | IMPORTRANGE belum diizinkan / rumus error | Buka spreadsheet Gmail, klik sel A1 → Izinkan akses |

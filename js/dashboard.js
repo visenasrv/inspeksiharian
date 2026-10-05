@@ -21,6 +21,7 @@ const Dashboard = {
       else { this.filter.range = null; this.render(); }
     });
     $$('#sec-dashboard .chip').forEach(c => c.addEventListener('click', () => this.setRange(c.dataset.range)));
+    $('#btn-unduh-dash').addEventListener('click', () => LaporanDashboard.unduh());
   },
 
   /** Dipanggil setiap kali data selesai dimuat */
@@ -70,6 +71,47 @@ const Dashboard = {
     return STATE.rows.filter(r => r.tgl >= dari && r.tgl <= sampai && (!pond || r.pond === pond));
   },
 
+  /** Semua angka dashboard untuk filter aktif — dipakai layar & PDF */
+  hitung() {
+    const f = this.filter, p = STATE.pengaturan;
+    const rows = this.data();
+    const sampel = rows.filter(r => r.ph !== null || r.tss !== null);
+    const luar = sampel.filter(r => cekBatas(r, p).luar);
+    const rekap = rekapKerusakan(rows, STATE.dataTerbaru, APP_CONFIG.HARI_KERUSAKAN_AKTIF);
+    const berulang = rekap.filter(g => g.jumlah >= 2);
+    const aktif = berulang.filter(g => g.aktif);
+    const pondDalam = f.pond ? [f.pond] : STATE.ponds.filter(pd => rows.some(r => r.pond === pd)); // pond tanpa laporan disembunyikan
+    const jmlHari = selisihHari(f.dari, f.sampai) + 1;
+
+    // Kondisi terakhir & statistik per pond
+    const kondisi = pondDalam.map(pd => {
+      const rp = rows.filter(r => r.pond === pd);
+      const last = rp[rp.length - 1] || null;
+      const ls = [...rp].reverse().find(r => r.ph !== null || r.tss !== null) || null;
+      const sp = rp.filter(r => r.ph !== null || r.tss !== null);
+      const phs = sp.map(r => r.ph).filter(v => v !== null), tsss = sp.map(r => r.tss).filter(v => v !== null);
+      return {
+        pond: pd, rp, last, ls,
+        telat: last ? selisihHari(last.tgl, STATE.dataTerbaru) : null,
+        batas: ls ? cekBatas(ls, p) : { phLuar: false, tssLuar: false, luar: false },
+        isu: rekap.filter(g => g.pond === pd && g.aktif && g.jumlah >= 2),
+        nSampel: sp.length,
+        nLuar: sp.filter(r => cekBatas(r, p).luar).length,
+        ph: phs.length ? { min: Math.min(...phs), rata: rataRata(phs), maks: Math.max(...phs) } : null,
+        tss: tsss.length ? { min: Math.min(...tsss), rata: rataRata(tsss), maks: Math.max(...tsss) } : null
+      };
+    });
+
+    return {
+      f, p, rows, sampel, luar, rekap, berulang, aktif, pondDalam, jmlHari, kondisi,
+      rataPh: rataRata(sampel.map(r => r.ph)),
+      rataTss: rataRata(sampel.map(r => r.tss)),
+      nPond: new Set(rows.map(r => r.pond)).size,
+      cek: rows.filter(r => r.sStatus === 'cek'),
+      insight: this.insight(rows, sampel, luar, aktif, pondDalam)
+    };
+  },
+
   render() {
     if (!STATE.siap) return;
     const f = this.filter;
@@ -79,16 +121,7 @@ const Dashboard = {
     $$('#sec-dashboard .chip').forEach(c => c.classList.toggle('active', c.dataset.range === f.range));
     $('#dash-bulan').value = this.bulanCocok(f.dari, f.sampai);
 
-    const p = STATE.pengaturan;
-    const rows = this.data();
-    const sampel = rows.filter(r => r.ph !== null || r.tss !== null);
-    const luar = sampel.filter(r => cekBatas(r, p).luar);
-    const rekap = rekapKerusakan(rows, STATE.dataTerbaru, APP_CONFIG.HARI_KERUSAKAN_AKTIF);
-    const berulang = rekap.filter(g => g.jumlah >= 2);
-    const aktif = berulang.filter(g => g.aktif);
-    const pondDalam = f.pond ? [f.pond] : STATE.ponds.filter(pd => rows.some(r => r.pond === pd)); // pond tanpa laporan di periode disembunyikan
-    const jmlHari = selisihHari(f.dari, f.sampai) + 1;
-
+    const h = this.hitung(), p = h.p;
     $('#dash-periode').textContent = `${teksRentang(f.dari, f.sampai)} · ${f.pond || 'semua pond'} · data terbaru ${fmtTglPanjang(STATE.dataTerbaru)}`;
     $('#batas-ph-label').textContent = `batas ${p.phMin}–${p.phMax}`;
     $('#batas-tss-label').textContent = `batas ≤ ${p.tssMax}`;
@@ -97,25 +130,23 @@ const Dashboard = {
     const kpi = (ikon, label, nilai, sub, kelas = '') =>
       `<div class="kpi ${kelas}"><div class="label"><i class="bi ${ikon}"></i>${label}</div><div class="value">${nilai}</div><div class="sub">${sub}</div></div>`;
     $('#kpi-grid').innerHTML = [
-      kpi('bi-clipboard-check', 'Laporan masuk', rows.length, `${jmlHari} hari · ${new Set(rows.map(r => r.pond)).size} pond`),
-      kpi('bi-droplet', 'Sampel pH/TSS terbaca', sampel.length, `rata-rata pH ${fmtPh(rataRata(sampel.map(r => r.ph)))} · TSS ${fmtTss(Math.round(rataRata(sampel.map(r => r.tss)) ?? NaN))}`),
-      kpi('bi-exclamation-octagon', 'Di luar batas', luar.length, `pH ${p.phMin}–${p.phMax} · TSS ≤ ${p.tssMax} mg/L`, luar.length ? 'bad' : ''),
-      kpi('bi-wrench-adjustable', 'Kerusakan masih dilaporkan', aktif.length, `${berulang.length} masalah berulang di periode ini`, aktif.length ? 'warn' : '')
+      kpi('bi-clipboard-check', 'Laporan masuk', h.rows.length, `${h.jmlHari} hari · ${h.nPond} pond`),
+      kpi('bi-droplet', 'Sampel pH/TSS terbaca', h.sampel.length, `rata-rata pH ${fmtPh(h.rataPh)} · TSS ${fmtTss(Math.round(h.rataTss ?? NaN))}`),
+      kpi('bi-exclamation-octagon', 'Di luar batas', h.luar.length, `pH ${p.phMin}–${p.phMax} · TSS ≤ ${p.tssMax} mg/L`, h.luar.length ? 'bad' : ''),
+      kpi('bi-wrench-adjustable', 'Kerusakan masih dilaporkan', h.aktif.length, `${h.berulang.length} masalah berulang di periode ini`, h.aktif.length ? 'warn' : '')
     ].join('');
 
-    this.renderInsight(rows, sampel, luar, aktif, pondDalam);
-    this.renderPond(rows, rekap, pondDalam);
-    this.renderCharts(rows, pondDalam);
-    this.renderTabel(luar, berulang, rows);
+    $('#insight-list').innerHTML = h.insight.map(x => `<li>${x.html}</li>`).join('');
+    this.renderPond(h);
+    this.renderCharts(h);
+    this.renderTabel(h.luar, h.berulang, h.rows);
   },
 
-  renderInsight(rows, sampel, luar, aktif, pondDalam) {
+  /** Ringkasan otomatis → [{ html, teks }] (teks polos untuk PDF) */
+  insight(rows, sampel, luar, aktif, pondDalam) {
     const p = STATE.pengaturan;
     const li = [];
-    if (!rows.length) {
-      $('#insight-list').innerHTML = '<li>Tidak ada laporan pada periode ini.</li>';
-      return;
-    }
+    if (!rows.length) return [{ html: 'Tidak ada laporan pada periode ini.', teks: 'Tidak ada laporan pada periode ini.' }];
     if (luar.length) {
       const per = {};
       luar.forEach(r => { per[r.pond] = (per[r.pond] || 0) + 1; });
@@ -141,21 +172,19 @@ const Dashboard = {
     });
     if (telat.length) li.push(`Belum ada laporan terbaru (≥ 2 hari) dari: <b>${telat.map(esc).join(', ')}</b>.`);
     const cek = rows.filter(r => r.sStatus === 'cek').length;
-    if (cek) li.push(`${cek} isian sampling tidak terbaca otomatis — lihat bagian paling bawah.`);
-    $('#insight-list').innerHTML = li.map(x => `<li>${x}</li>`).join('');
+    const hasil = li.map(html => ({ html, teks: teksPolos(html) }));
+    if (cek) hasil.push({
+      html: `${cek} isian sampling tidak terbaca otomatis — lihat bagian paling bawah.`,
+      teks: `${cek} isian sampling tidak dapat dibaca otomatis sehingga tidak ikut dihitung.`
+    });
+    return hasil;
   },
 
-  renderPond(rows, rekap, pondDalam) {
-    const p = STATE.pengaturan;
-    $('#pond-grid').innerHTML = pondDalam.map(pd => {
-      const rp = rows.filter(r => r.pond === pd);
-      const head = `<h3><span style="display:flex;gap:8px;align-items:center"><span class="dot" style="background:${warnaPond(pd)}"></span>${esc(pd)}</span>`;
-      if (!rp.length) return `<div class="pond-card">${head}</h3><div class="meta">Tidak ada laporan pada periode ini.</div></div>`;
-      const last = rp[rp.length - 1];
-      const ls = [...rp].reverse().find(r => r.ph !== null || r.tss !== null);
-      const telat = selisihHari(last.tgl, STATE.dataTerbaru);
-      const b = ls ? cekBatas(ls, p) : { phLuar: false, tssLuar: false, luar: false };
-      const isu = rekap.filter(g => g.pond === pd && g.aktif && g.jumlah >= 2);
+  renderPond(h) {
+    $('#pond-grid').innerHTML = h.kondisi.map(k => {
+      const head = `<h3><span style="display:flex;gap:8px;align-items:center"><span class="dot" style="background:${warnaPond(k.pond)}"></span>${esc(k.pond)}</span>`;
+      if (!k.last) return `<div class="pond-card">${head}</h3><div class="meta">Tidak ada laporan pada periode ini.</div></div>`;
+      const { last, ls, telat, batas: b, isu } = k;
       const status = ls ? (b.luar ? '<span class="badge bad">Di luar batas</span>' : '<span class="badge ok">Dalam batas</span>') : '<span class="badge">Belum ada sampel</span>';
       return `<div class="pond-card">${head}${status}</h3>
         <div class="meta ${telat >= 2 ? 'telat' : ''}">Laporan terakhir ${fmtTglPanjang(last.tgl)}${telat >= 2 ? ` · ${telat} hari tanpa laporan` : ''}${ls && ls.tgl !== last.tgl ? `<br>Sampling terakhir ${fmtTglPanjang(ls.tgl)}` : ''}</div>
@@ -170,57 +199,73 @@ const Dashboard = {
     }).join('');
   },
 
-  renderCharts(rows, pondDalam) {
-    if (typeof Chart === 'undefined') return;
-    const p = STATE.pengaturan;
-    const labels = daftarTanggal(this.filter.dari, this.filter.sampai);
-    const ink = cssVar('--muted'), grid = cssVar('--line'), bahaya = cssVar('--danger');
-    Chart.defaults.font.family = cssVar('--font');
-    Chart.defaults.color = ink;
-
-    const harian = (pd, field) => labels.map(d => rataRata(rows.filter(r => r.pond === pd && r.tgl === d).map(r => r[field])));
+  /**
+   * Konfigurasi Chart.js bersama untuk layar & PDF.
+   * tema: { ink, grid, bahaya, font, pdf }
+   */
+  konfigGrafik(field, h, tema) {
+    const p = h.p;
+    const labels = daftarTanggal(h.f.dari, h.f.sampai);
+    const { ink, grid, bahaya, pdf } = tema;
+    const luarFn = field === 'ph' ? v => v < p.phMin || v > p.phMax : v => v > p.tssMax;
+    const harian = pd => labels.map(d => rataRata(h.rows.filter(r => r.pond === pd && r.tgl === d).map(r => r[field])));
     const garis = (label, nilai) => ({
-      label, data: labels.map(() => nilai), borderColor: bahaya, borderWidth: 1.5, borderDash: [6, 4],
+      label, data: labels.map(() => nilai), borderColor: bahaya, borderWidth: pdf ? 1.2 : 1.5, borderDash: [6, 4],
       pointRadius: 0, pointHoverRadius: 0, fill: false, order: 0
     });
-    const seri = (field, luarFn) => pondDalam.map(pd => {
+    const seri = h.pondDalam.map(pd => {
       const w = warnaPond(pd);
       return {
-        label: pd, data: harian(pd, field), borderColor: w, backgroundColor: w,
-        borderWidth: 2, tension: .25, spanGaps: true,
-        pointRadius: c => (c.raw !== null && luarFn(c.raw) ? 4.5 : 2.2),
+        label: pd, data: harian(pd), borderColor: w, backgroundColor: w,
+        borderWidth: pdf ? 1.6 : 2, tension: .25, spanGaps: true,
+        pointRadius: c => (c.raw !== null && luarFn(c.raw) ? (pdf ? 3.2 : 4.5) : (pdf ? 1.4 : 2.2)),
         pointBackgroundColor: c => (c.raw !== null && luarFn(c.raw) ? bahaya : w),
         pointBorderColor: c => (c.raw !== null && luarFn(c.raw) ? bahaya : w)
       };
     });
+    const batas = field === 'ph'
+      ? [garis(`Batas min ${p.phMin}`, p.phMin), garis(`Batas maks ${p.phMax}`, p.phMax)]
+      : [garis(`Batas ${p.tssMax} mg/L`, p.tssMax)];
+    const sumbuY = field === 'ph'
+      ? { suggestedMin: Math.min(5, p.phMin - .5), suggestedMax: Math.max(10, p.phMax + .5) }
+      : { beginAtZero: true, suggestedMax: p.tssMax * 1.15 };
+    if (pdf && field === 'tss') sumbuY.title = { display: true, text: 'mg/L', color: ink, font: { size: 9 } };
+    const ukuranHuruf = pdf ? 9 : 12;
 
-    const opsi = (ySuggest, satuan) => ({
-      responsive: true, maintainAspectRatio: false, animation: false,
-      interaction: { mode: 'nearest', intersect: false },
-      plugins: {
-        legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true } },
-        tooltip: {
-          callbacks: {
-            title: it => fmtTglPanjang(labels[it[0].dataIndex], true),
-            label: c => (c.raw === null ? null : `${c.dataset.label}: ${c.dataset.label.startsWith('Batas') ? c.raw : (satuan === 'pH' ? fmtPh(c.raw) : fmtTss(Math.round(c.raw * 10) / 10))}`)
+    return {
+      type: 'line',
+      data: { labels, datasets: seri.concat(batas) },
+      options: {
+        responsive: !pdf, maintainAspectRatio: false, animation: false,
+        devicePixelRatio: pdf ? 3 : undefined,
+        interaction: { mode: 'nearest', intersect: false },
+        font: { family: tema.font, size: ukuranHuruf },
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: pdf ? 7 : 10, boxHeight: pdf ? 7 : 10, usePointStyle: true, color: ink, padding: pdf ? 8 : 10, font: { family: tema.font, size: ukuranHuruf } } },
+          tooltip: pdf ? { enabled: false } : {
+            callbacks: {
+              title: it => fmtTglPanjang(labels[it[0].dataIndex], true),
+              label: c => (c.raw === null ? null : `${c.dataset.label}: ${c.dataset.label.startsWith('Batas') ? c.raw : (field === 'ph' ? fmtPh(c.raw) : fmtTss(Math.round(c.raw * 10) / 10))}`)
+            }
           }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: ink, maxTicksLimit: pdf ? 10 : 8, maxRotation: 0, font: { family: tema.font, size: ukuranHuruf }, callback: (v, i) => fmtTglSingkat(labels[i]) } },
+          y: Object.assign({ grid: { color: grid }, border: { display: false }, ticks: { color: ink, font: { family: tema.font, size: ukuranHuruf } } }, sumbuY)
         }
-      },
-      scales: {
-        x: { grid: { display: false }, ticks: { maxTicksLimit: 8, maxRotation: 0, callback: (v, i) => fmtTglSingkat(labels[i]) } },
-        y: Object.assign({ grid: { color: grid }, border: { display: false } }, ySuggest)
       }
-    });
+    };
+  },
 
-    const phLuar = v => v < p.phMin || v > p.phMax;
-    const tssLuar = v => v > p.tssMax;
-    const dataPh = { labels, datasets: seri('ph', phLuar).concat([garis(`Batas min ${p.phMin}`, p.phMin), garis(`Batas maks ${p.phMax}`, p.phMax)]) };
-    const dataTss = { labels, datasets: seri('tss', tssLuar).concat([garis(`Batas ${p.tssMax} mg/L`, p.tssMax)]) };
-
+  renderCharts(h) {
+    if (typeof Chart === 'undefined') return;
+    const tema = { ink: cssVar('--muted'), grid: cssVar('--line'), bahaya: cssVar('--danger'), font: cssVar('--font'), pdf: false };
+    Chart.defaults.font.family = tema.font;
+    Chart.defaults.color = tema.ink;
     this.charts.ph?.destroy();
     this.charts.tss?.destroy();
-    this.charts.ph = new Chart($('#chart-ph'), { type: 'line', data: dataPh, options: opsi({ suggestedMin: Math.min(5, p.phMin - .5), suggestedMax: Math.max(10, p.phMax + .5) }, 'pH') });
-    this.charts.tss = new Chart($('#chart-tss'), { type: 'line', data: dataTss, options: opsi({ beginAtZero: true, suggestedMax: p.tssMax * 1.15 }, 'TSS') });
+    this.charts.ph = new Chart($('#chart-ph'), this.konfigGrafik('ph', h, tema));
+    this.charts.tss = new Chart($('#chart-tss'), this.konfigGrafik('tss', h, tema));
   },
 
   resizeCharts() { Object.values(this.charts).forEach(c => c?.resize()); },

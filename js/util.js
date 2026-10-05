@@ -215,6 +215,11 @@ function rekapKerusakan(rows, refIso, hariAktif) {
   }).sort((a, b) => (b.aktif - a.aktif) || (b.jumlah - a.jumlah) || a.pond.localeCompare(b.pond));
 }
 
+/** HTML ringkas → teks polos (untuk PDF) */
+function teksPolos(html) {
+  return String(html).replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+
 /** Rata-rata, abaikan null */
 function rataRata(arr) { const v = arr.filter(x => x !== null && !isNaN(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; }
 

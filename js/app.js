@@ -11,7 +11,8 @@
 const STATE = {
   headers: [], rows: [], ponds: [], pengaturan: {},
   dataTerbaru: null, dataTerlama: null, dimuatPada: null,
-  siap: false, sidik: '', modeImpor: false
+  siap: false, sidik: '', modeImpor: false,
+  logo: null            // { dataUrl, versi, w, h }
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -126,6 +127,7 @@ function olahPengaturan(p = {}) {
     tssMax: Number(p.tssMax ?? 200),
     marginPdf: Number(p.marginPdf || 6),
     orientasiPdf: p.orientasiPdf === 'portrait' ? 'portrait' : 'landscape',
+    logoVersi: String(p.logoVersi || ''),
     pinDiatur: !!p.pinDiatur
   };
 }
@@ -150,6 +152,7 @@ function terapkanData(d, sidik) {
   $('#brand-sub').textContent = STATE.pengaturan.judulLokasi;
   selesaiMemuat();
   tandaiSemuaKotor();
+  Logo.sinkron(); // unduh logo hanya bila versinya berubah (di latar)
 }
 
 function perbaruiSync() {
@@ -203,9 +206,11 @@ document.addEventListener('DOMContentLoaded', () => {
   temaAwal();
   $('#btn-theme').addEventListener('click', () => setTema(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
   $('#btn-refresh').addEventListener('click', () => segarkan({ paksa: true }));
+  Logo.muatLokal();
   Dashboard.init();
   Laporan.init();
   Pengaturan.init();
+  Admin.init();
   navigasi(location.hash.slice(1) || 'dashboard');
 
   // 1) Data terakhir dari browser tampil SEKETIKA (tanpa menunggu server)

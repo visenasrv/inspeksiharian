@@ -137,7 +137,8 @@ a { color: var(--brand); }
 /* ── Section ── */
 .section { display: none; animation: muncul .2s ease; }
 .section.active { display: block; }
-.page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin: 6px 0 16px; }
+.page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin: 6px 0 16px; flex-wrap: wrap; }
+.page-head > div { min-width: 0; }
 .page-head p { margin: 4px 0 0; }
 
 /* ── Pengaman lebar (HP): isi tidak boleh mendorong halaman melebar ── */
@@ -336,6 +337,9 @@ fieldset:disabled { opacity: .55; }
 
 /* ── Isi laporan (dipakai di layar & saat cetak) ── */
 .rpt { font-family: Arial, Helvetica, sans-serif; color: #000; }
+.rpt-kop { display: grid; grid-template-columns: 22mm 1fr 22mm; align-items: center; gap: 3mm; }
+.rpt-logo { height: 13mm; display: flex; align-items: center; }
+.rpt-logo img { max-height: 13mm; max-width: 22mm; object-fit: contain; }
 .rpt-title { text-align: center; font-weight: 700; font-size: 11pt; line-height: 1.3; }
 .rpt-sub { text-align: center; font-size: 7.5pt; margin: 3px 0 6px; color: #333; }
 .rpt-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 6.4pt; line-height: 1.22; }
@@ -360,9 +364,7 @@ fieldset:disabled { opacity: .55; }
 .form-sec { font-size: .82rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--brand); margin: 22px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
 .form-sec:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; flex-wrap: wrap; }
-.pin-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
-.pin-row .field { width: 200px; }
-#pin-info { margin: 10px 0 0; }
+
 
 /* ── Kerangka (skeleton) saat data pertama kali dimuat — tanpa layar loading ── */
 .sk {
@@ -409,6 +411,9 @@ fieldset:disabled { opacity: .55; }
    (ukuran & margin @page disisipkan oleh laporan.js)
    ============================================================ */
 @media print {
+  /* Tamu (bukan admin) tidak dapat mencetak laporan, termasuk lewat Ctrl+P */
+  body:not(.is-admin) .container, body:not(.is-admin) .dlg { display: none !important; }
+  body:not(.is-admin) .cetak-terkunci { display: block !important; }
   body { background: #fff !important; padding: 0 !important; }
   .topbar, .bottomnav, .toast, .loading, .page-head, .lap-controls,
   .section:not(#sec-laporan) { display: none !important; }
@@ -418,3 +423,74 @@ fieldset:disabled { opacity: .55; }
   .paper, .paper.portrait { width: auto; min-height: 0; padding: 0 !important; box-shadow: none; margin: 0; }
   .rpt-tbl th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+
+/* ============================================================
+   MODE ADMIN
+   ============================================================ */
+body:not(.is-admin) .admin-only { display: none !important; }
+body.is-admin .tamu-only { display: none !important; }
+.cetak-terkunci { display: none; padding: 40px; font: 600 14pt Arial, sans-serif; text-align: center; color: #000; }
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+
+/* Tombol Admin di header */
+.admin-btn {
+  font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, .28); background: transparent; color: #fff;
+}
+.admin-btn i { font-size: 1.05rem; }
+.admin-btn:hover { background: rgba(255, 255, 255, .12); }
+body.is-admin .admin-btn { background: #ffd27a; border-color: #ffd27a; color: #2b2208; }
+@media (max-width: 520px) {
+  .admin-btn { width: 36px; padding: 0; justify-content: center; }
+  .admin-btn span { display: none; }
+}
+
+/* Logo di header */
+.brand-mark.ada-logo { background: #fff; padding: 3px; }
+.brand-mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+/* Catatan khusus admin (halaman Laporan untuk tamu) */
+.kunci-note {
+  grid-column: 1 / -1; margin-left: auto;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: .84rem; color: var(--muted);
+  background: var(--surface-2); border-radius: 10px; padding: 6px 6px 6px 12px;
+}
+.kunci-note i { color: var(--accent); }
+.btn-sm { min-height: 34px; padding: 6px 12px; font-size: .82rem; }
+
+/* Kartu status admin di Pengaturan */
+.admin-card { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.admin-card .ikon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 1.3rem; flex: none; background: var(--surface-2); color: var(--muted); }
+.admin-card.aktif .ikon { background: var(--accent-soft); color: var(--accent); }
+.admin-card .teks { flex: 1; min-width: 180px; }
+.admin-card .teks b { display: block; font-size: .95rem; }
+.admin-card .teks span { font-size: .84rem; color: var(--muted); }
+
+/* Logo di Pengaturan */
+.logo-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.logo-preview {
+  width: 112px; height: 112px; flex: none; border-radius: 14px; border: 1px dashed var(--line);
+  background: repeating-conic-gradient(var(--surface-2) 0% 25%, var(--surface) 0% 50%) 50% / 16px 16px;
+  display: grid; place-items: center; overflow: hidden; color: var(--muted); font-size: .76rem; text-align: center; padding: 8px;
+}
+.logo-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.logo-preview.memuat { opacity: .5; }
+.logo-aksi { flex: 1; min-width: 200px; }
+.logo-tombol { display: flex; gap: 8px; flex-wrap: wrap; }
+.logo-aksi p { margin: 8px 0 0; }
+fieldset:disabled label.btn { pointer-events: none; }
+
+/* Dialog */
+.dlg { border: 0; padding: 0; border-radius: 18px; background: var(--surface); color: var(--ink); width: min(380px, calc(100vw - 32px)); box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
+.dlg::backdrop { background: rgba(8, 18, 16, .55); backdrop-filter: blur(2px); }
+.dlg-box { padding: 22px; display: grid; gap: 12px; margin: 0; }
+.dlg-ikon { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 1.4rem; background: var(--brand-soft); color: var(--brand); }
+.dlg h2 { font-size: 1.15rem; font-weight: 800; }
+.dlg p { margin: 0; }
+.dlg-galat { color: var(--danger); font-size: .84rem; font-weight: 600; min-height: 1em; }
+.dlg-galat:empty { display: none; }
+.dlg-aksi { display: flex; gap: 8px; justify-content: flex-end; }
+.dlg input { font-size: 1.1rem; letter-spacing: .2em; }
