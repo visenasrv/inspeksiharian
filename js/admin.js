@@ -6,24 +6,40 @@ const KUNCI_ADMIN = 'inspeksi-admin-v1';
 const KUNCI_LOGO = 'inspeksi-logo-v1';
 
 const Admin = {
-  sesi: null,           // { token, exp }
+  sesi: null,           // { token, exp, username, wajibGanti }
   timerHabis: null,
 
   aktif() { return !!(this.sesi && this.sesi.exp > Date.now()); },
   token() { return this.aktif() ? this.sesi.token : ''; },
+  wajibGanti() { return this.aktif() && !!this.sesi.wajibGanti; },
 
   init() {
     const s = simpanan.get(KUNCI_ADMIN);
-    if (s && s.token && s.exp > Date.now()) this.sesi = s; else simpanan.del(KUNCI_ADMIN);
+    if (s && s.token && s.exp > Date.now() && s.username) this.sesi = s; else simpanan.del(KUNCI_ADMIN);
     this.terapkan();
 
     $('#btn-admin').addEventListener('click', () => this.bukaDialog());
-    document.addEventListener('click', e => { if (e.target.closest('[data-masuk-admin]')) this.bukaDialog(); });
+    document.addEventListener('click', e => {
+      if (e.target.closest('[data-masuk-admin]')) this.bukaDialog();
+      const lihat = e.target.closest('[data-lihat]');
+      if (lihat) {                                   // tombol tampilkan / sembunyikan password
+        const inp = document.getElementById(lihat.dataset.lihat);
+        const tampil = inp.type === 'password';
+        inp.type = tampil ? 'text' : 'password';
+        lihat.querySelector('i').className = tampil ? 'bi bi-eye-slash' : 'bi bi-eye';
+      }
+    });
     $('#form-admin').addEventListener('submit', e => { e.preventDefault(); this.aktif() ? this.keluar() : this.masuk(); });
     $('#dlg-batal').addEventListener('click', () => $('#dlg-admin').close());
 
     // Sesi tersimpan → periksa keabsahannya di latar (tidak menghambat tampilan)
     if (this.sesi) setTimeout(() => this.periksaLatar(), 2500);
+  },
+
+  simpanSesi(data) {
+    this.sesi = { token: data.token, exp: data.exp, username: data.username, wajibGanti: !!data.wajibGanti };
+    simpanan.set(KUNCI_ADMIN, this.sesi);
+    this.terapkan();
   },
 
   /** Terapkan status admin ke seluruh tampilan */
@@ -32,10 +48,15 @@ const Admin = {
     document.body.classList.toggle('is-admin', aktif);
     const btn = $('#btn-admin');
     btn.querySelector('i').className = aktif ? 'bi bi-person-check-fill' : 'bi bi-person-lock';
-    btn.querySelector('span').textContent = aktif ? 'Admin' : 'Masuk';
-    btn.title = aktif ? `Masuk sebagai admin sampai ${this.jamHabis()} — klik untuk keluar` : 'Masuk sebagai admin';
+    btn.querySelector('span').textContent = aktif ? this.sesi.username : 'Masuk';
+    btn.title = aktif ? `Masuk sebagai ${this.sesi.username} sampai ${this.jamHabis()} — klik untuk keluar` : 'Masuk sebagai admin';
     clearTimeout(this.timerHabis);
     if (aktif) this.timerHabis = setTimeout(() => this.keluar(true), Math.min(this.sesi.exp - Date.now(), 2147483000));
+    // Menu Pengaturan hanya untuk admin → tamu yang sedang di Pengaturan dipindah ke Dashboard
+    if (!aktif && typeof sectionAktif !== 'undefined' && sectionAktif === 'pengaturan') {
+      history.replaceState(null, '', '#dashboard');
+      navigasi('dashboard');
+    }
     if (typeof Pengaturan !== 'undefined' && STATE.siap) Pengaturan.isi();
   },
 
@@ -45,37 +66,43 @@ const Admin = {
 
   bukaDialog() {
     const aktif = this.aktif();
-    $('#dlg-admin-judul').textContent = aktif ? 'Anda masuk sebagai admin' : 'Masuk admin';
+    $('#dlg-admin-judul').textContent = aktif ? `Masuk sebagai ${this.sesi.username}` : 'Masuk admin';
     $('#dlg-admin-teks').textContent = aktif
       ? `Sesi berlaku sampai ${this.jamHabis()}. Keluar bila perangkat ini dipakai orang lain.`
       : 'Admin dapat mengunduh laporan, mencetak, mengubah pengaturan, dan mengganti logo.';
-    $('#dlg-pin-wrap').hidden = aktif;
+    $('#dlg-isian').hidden = aktif;
     $('#dlg-ok').innerHTML = aktif ? '<i class="bi bi-box-arrow-right"></i> Keluar' : '<i class="bi bi-box-arrow-in-right"></i> Masuk';
     $('#dlg-ok').classList.toggle('btn-primary', !aktif);
     $('#dlg-galat').textContent = '';
-    $('#admin-pin').value = '';
+    $('#admin-pass').value = '';
+    $('#admin-pass').type = 'password';
     const dlg = $('#dlg-admin');
     if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
-    if (!aktif) setTimeout(() => $('#admin-pin').focus(), 50);
+    if (!aktif) setTimeout(() => ($('#admin-user').value ? $('#admin-pass') : $('#admin-user')).focus(), 50);
   },
 
   async masuk() {
-    const pin = $('#admin-pin').value.trim();
-    if (!pin) { $('#dlg-galat').textContent = 'Masukkan PIN admin.'; return; }
+    const username = $('#admin-user').value.trim(), password = $('#admin-pass').value;
+    if (!username || !password) { $('#dlg-galat').textContent = 'Isi username dan password.'; return; }
     const btn = $('#dlg-ok');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner sm"></span> Memeriksa…';
     try {
-      const res = await apiPost('masuk', { pin });
+      const res = await apiPost('masuk', { username, password });
       if (!res.success) throw new Error(res.message);
-      this.sesi = { token: res.data.token, exp: res.data.exp };
-      simpanan.set(KUNCI_ADMIN, this.sesi);
-      this.terapkan();
+      this.simpanSesi(res.data);
       $('#dlg-admin').close();
-      notif('Berhasil masuk sebagai admin.');
+      $('#admin-pass').value = '';
+      if (this.wajibGanti()) {
+        location.hash = '#pengaturan';
+        notif('Berhasil masuk. Segera ganti password awal Anda.');
+        setTimeout(() => { $('#form-akun').scrollIntoView({ block: 'start', behavior: 'smooth' }); $('#akun-baru').focus(); }, 150);
+      } else {
+        notif(`Berhasil masuk sebagai ${res.data.username}.`);
+      }
     } catch (err) {
       $('#dlg-galat').textContent = err.message;
-      $('#admin-pin').select();
+      $('#admin-pass').select();
     } finally {
       btn.disabled = false;
       if (!this.aktif()) btn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> Masuk';
@@ -87,24 +114,35 @@ const Admin = {
     simpanan.del(KUNCI_ADMIN);
     this.terapkan();
     if ($('#dlg-admin').open) $('#dlg-admin').close();
+    if ($('#dlg-unduh').open) $('#dlg-unduh').close();
     notif(karenaHabis ? 'Sesi admin berakhir. Silakan masuk lagi.' : 'Anda keluar dari mode admin.', karenaHabis ? 'error' : 'ok');
   },
 
-  /** Cek token ke server di latar; bila tidak sah lagi (mis. PIN diganti) → keluar */
+  /** Cek token ke server di latar; bila tidak sah lagi (akun diganti / kedaluwarsa) → keluar */
   async periksaLatar() {
     if (!this.aktif() || !gasUrlSiap()) return;
     try {
       const res = await apiPost('cekToken', { token: this.token() });
-      if (!res.success) this.keluar(true);
+      if (!res.success) { this.keluar(true); return; }
+      if (res.data && (res.data.wajibGanti !== this.sesi.wajibGanti || res.data.username !== this.sesi.username)) {
+        this.simpanSesi(Object.assign({}, this.sesi, { wajibGanti: res.data.wajibGanti, username: res.data.username }));
+      }
     } catch (e) { /* offline: biarkan, server tetap memeriksa saat menyimpan */ }
   },
 
-  /** Penjaga tombol unduh/cetak */
+  /** Penjaga fitur admin (unduh, cetak, simpan) */
   wajib() {
-    if (this.aktif()) return true;
-    notif('Fitur ini khusus admin. Silakan masuk terlebih dahulu.', 'error');
-    this.bukaDialog();
-    return false;
+    if (!this.aktif()) {
+      notif('Fitur ini khusus admin. Silakan masuk terlebih dahulu.', 'error');
+      this.bukaDialog();
+      return false;
+    }
+    if (this.wajibGanti()) {
+      notif('Ganti password awal terlebih dahulu di Pengaturan → Akun admin.', 'error');
+      location.hash = '#pengaturan';
+      return false;
+    }
+    return true;
   },
 
   /** Error dari server karena sesi → keluar otomatis */

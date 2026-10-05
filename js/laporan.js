@@ -158,22 +158,54 @@ const Laporan = {
     </div>`;
   },
 
-  namaFile(per) {
-    const s = this.st;
-    const pond = s.pond ? '_' + s.pond.replace(/[^\w]+/g, '-') : '';
-    const inti = s.jenis === 'bulanan' ? `${per.dari.slice(0, 7)}` : (per.dari === per.sampai ? per.dari : `${per.dari}_sd_${per.sampai}`);
+  namaFile(per, bulanan, pondNama) {
+    const pond = pondNama ? '_' + pondNama.replace(/[^\w]+/g, '-') : '';
+    const inti = bulanan ? `${per.dari.slice(0, 7)}` : (per.dari === per.sampai ? per.dari : `${per.dari}_sd_${per.sampai}`);
     return `Laporan-Inspeksi-Harian_${inti}${pond}.pdf`;
   },
 
-  async unduhPdf() {
+  /** Tombol "Unduh PDF" → jendela konfirmasi bulan/tanggal → PDF */
+  unduhPdf() {
     if (!STATE.siap || !Admin.wajib()) return;
-    const btn = $('#btn-pdf'), label = btn.innerHTML;
-    btn.disabled = true;
-    try {
-      if (!window.jspdf || !window.jspdf.jsPDF) {
-        btn.innerHTML = '<span class="spinner sm"></span> Menyiapkan…';
-        await muatLibPdf();
+    const s = this.st, per = this.periode();
+    const q = s.cari.trim();
+    const hitungEntri = (r, pond) => STATE.rows.filter(x =>
+      x.tgl >= r.dari && x.tgl <= r.sampai && (!pond || x.pond === pond) &&
+      (!q || x.v.join(' ').toLowerCase().includes(q.toLowerCase()) || x.pond.toLowerCase().includes(q.toLowerCase()))).length;
+    KonfirmasiUnduh.buka({
+      judul: 'Unduh laporan inspeksi harian',
+      sub: 'Tabel seluruh isian formulir pada periode terpilih, dengan tanda tangan supervisor.',
+      awal: { mode: s.jenis === 'bulanan' ? 'bulan' : 'tanggal', bulan: `${s.tahun}-${pad2(s.bulan)}`, dari: per.dari, sampai: per.sampai, pond: s.pond },
+      info: (sel, r) => ({
+        entri: hitungEntri(r, sel.pond),
+        baris: [
+          ['Judul', `LAPORAN INSPEKSI HARIAN ${judulBulanTahun(r.dari, r.sampai)}`],
+          ['Periode', teksRentang(r.dari, r.sampai)],
+          ['Pond', sel.pond || 'Semua pond'],
+          ...(q ? [['Kata kunci', `"${q}"`]] : []),
+          ['Kertas', `A4 ${s.orientasi === 'portrait' ? 'tegak' : 'mendatar'} · margin ${this.margin()} mm`]
+        ],
+        file: this.namaFile(r, sel.mode === 'bulan', sel.pond)
+      }),
+      lanjut: async (sel, r) => {
+        // Terapkan pilihan ke halaman Laporan (pratinjau = isi PDF)
+        const sama = r.dari === per.dari && r.sampai === per.sampai;
+        if (!sama || (sel.mode === 'bulan') !== (s.jenis === 'bulanan')) {
+          if (sel.mode === 'bulan') Object.assign(s, { jenis: 'bulanan', bulan: String(Number(sel.bulan.slice(5, 7))), tahun: sel.bulan.slice(0, 4) });
+          else if (r.dari === r.sampai) Object.assign(s, { jenis: 'harian', tgl: r.dari });
+          else if (r.dari === awalMinggu(r.dari) && r.sampai === tambahHari(r.dari, 6)) Object.assign(s, { jenis: 'mingguan', tgl: r.dari });
+          else Object.assign(s, { jenis: 'rentang', dari: r.dari, sampai: r.sampai });
+        }
+        s.pond = sel.pond;
+        this.render();
+        await this.buatPdf();
       }
+    });
+  },
+
+  async buatPdf() {
+    await muatLibPdf();
+    {
       const { jsPDF } = window.jspdf;
       const o = this.st.orientasi === 'portrait' ? 'portrait' : 'landscape';
       const m = this.margin();
@@ -256,13 +288,8 @@ const Laporan = {
         doc.setTextColor(0);
       }
 
-      doc.save(this.namaFile(per));
+      doc.save(this.namaFile(per, this.st.jenis === 'bulanan', this.st.pond));
       notif(`PDF dibuat: ${n} halaman, ${rows.length} entri.`);
-    } catch (err) {
-      notif('Gagal membuat PDF: ' + err.message, 'error');
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = label;
     }
   },
 

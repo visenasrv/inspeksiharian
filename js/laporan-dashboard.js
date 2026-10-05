@@ -20,22 +20,43 @@ const LaporanDashboard = {
       .replace(/[^\x00-\xFF–—‘’“”•…]/g, '');
   },
 
-  async unduh() {
+  /** Tombol "Unduh laporan" → jendela konfirmasi bulan/tanggal → PDF */
+  unduh() {
     if (!STATE.siap || !Admin.wajib()) return;
-    const btn = $('#btn-unduh-dash'), label = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner sm"></span> <span>Menyiapkan…</span>';
-    try {
-      await muatLibPdf();
-      const h = Dashboard.hitung();
-      const nama = this.buat(h);
-      notif(`Laporan dashboard diunduh: ${nama}`);
-    } catch (err) {
-      notif('Gagal membuat laporan: ' + err.message, 'error');
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = label;
-    }
+    const f = Dashboard.filter;
+    const bulan = Dashboard.bulanCocok(f.dari, f.sampai);
+    const namaFile = (r, pond) => `Laporan-Monitoring-Pond_${r.dari === r.sampai ? r.dari : r.dari + '_sd_' + r.sampai}${pond ? '_' + pond.replace(/[^\w]+/g, '-') : ''}.pdf`;
+    KonfirmasiUnduh.buka({
+      judul: 'Unduh laporan monitoring',
+      sub: 'Berisi ringkasan, kondisi per pond, grafik pH & TSS, tabel, dan tanda tangan supervisor.',
+      awal: { mode: bulan ? 'bulan' : 'tanggal', bulan: bulan || f.sampai.slice(0, 7), dari: f.dari, sampai: f.sampai, pond: f.pond },
+      // Bulan berjalan dihitung s/d data terbaru (sama seperti filter bulan di dashboard)
+      rentang: s => {
+        const [y, m] = s.bulan.split('-').map(Number), ujung = akhirBulan(y, m), akhir = STATE.dataTerbaru;
+        return { dari: `${s.bulan}-01`, sampai: ujung > akhir && s.bulan === akhir.slice(0, 7) ? akhir : ujung };
+      },
+      info: (s, r) => ({
+        entri: STATE.rows.filter(x => x.tgl >= r.dari && x.tgl <= r.sampai && (!s.pond || x.pond === s.pond)).length,
+        baris: [
+          ['Laporan', 'Monitoring Inspeksi Pond'],
+          ['Periode', teksRentang(r.dari, r.sampai)],
+          ['Pond', s.pond || 'Semua pond'],
+          ['Kertas', 'A4 tegak']
+        ],
+        file: namaFile(r, s.pond)
+      }),
+      lanjut: async (s, r) => {
+        // Terapkan pilihan ke dashboard agar layar sama dengan isi PDF
+        if (s.mode === 'bulan') Dashboard.setRange('m:' + s.bulan, false);
+        else Object.assign(Dashboard.filter, { dari: r.dari, sampai: r.sampai, range: null });
+        Dashboard.filter.pond = s.pond;
+        $('#dash-pond').value = s.pond;
+        Dashboard.render();
+        await muatLibPdf();
+        const nama = this.buat(Dashboard.hitung());
+        notif(`Laporan diunduh: ${nama}`);
+      }
+    });
   },
 
   /** Gambar grafik terang khusus PDF (tidak terpengaruh mode gelap) */

@@ -49,7 +49,7 @@
       <nav class="tabs" aria-label="Menu utama">
         <a href="#dashboard" data-nav="dashboard" class="tab"><i class="bi bi-activity"></i> Dashboard</a>
         <a href="#laporan" data-nav="laporan" class="tab"><i class="bi bi-file-earmark-text"></i> Laporan</a>
-        <a href="#pengaturan" data-nav="pengaturan" class="tab"><i class="bi bi-sliders"></i> Pengaturan</a>
+        <a href="#pengaturan" data-nav="pengaturan" class="tab admin-only"><i class="bi bi-sliders"></i> Pengaturan</a>
       </nav>
       <div class="topbar-actions">
         <span class="sync" id="sync-status" title="Jumlah entri · waktu data terakhir dimuat"></span>
@@ -218,7 +218,7 @@
     </section>
 
     <!-- ══════════ PENGATURAN ══════════ -->
-    <section id="sec-pengaturan" class="section" data-section="pengaturan">
+    <section id="sec-pengaturan" class="section admin-only" data-section="pengaturan">
       <div class="page-head">
         <div>
           <h1>Pengaturan</h1>
@@ -227,6 +227,32 @@
       </div>
 
       <div class="card admin-card" id="admin-card"></div>
+
+      <form class="card form" id="form-akun" novalidate autocomplete="off">
+        <h3 class="form-sec"><i class="bi bi-person-gear"></i> Akun admin</h3>
+        <div class="peringatan" id="akun-wajib" hidden>
+          <i class="bi bi-shield-exclamation"></i>
+          <span>Anda masih memakai <b>password awal</b>. Demi keamanan, ganti password sekarang. Fitur admin lain aktif setelah password diganti.</span>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label for="akun-username">Username</label><input type="text" id="akun-username" maxlength="30" autocomplete="username" spellcheck="false" autocapitalize="off"></div>
+          <div class="field"><label for="akun-baru">Password baru</label>
+            <div class="pw"><input type="password" id="akun-baru" maxlength="64" autocomplete="new-password" placeholder="kosongkan bila tidak diganti"><button type="button" class="pw-lihat" data-lihat="akun-baru" aria-label="Tampilkan password"><i class="bi bi-eye"></i></button></div>
+          </div>
+          <div class="field"><label for="akun-ulang">Ulangi password baru</label>
+            <div class="pw"><input type="password" id="akun-ulang" maxlength="64" autocomplete="new-password"><button type="button" class="pw-lihat" data-lihat="akun-ulang" aria-label="Tampilkan password"><i class="bi bi-eye"></i></button></div>
+          </div>
+        </div>
+        <p class="muted small aturan-pw">Password minimal 8 karakter, berisi huruf dan angka, dan tidak memuat username. Username 3–30 karakter (huruf, angka, titik, garis bawah, minus).</p>
+        <div class="form-grid">
+          <div class="field"><label for="akun-lama">Password saat ini <span class="req">*</span></label>
+            <div class="pw"><input type="password" id="akun-lama" maxlength="64" autocomplete="current-password"><button type="button" class="pw-lihat" data-lihat="akun-lama" aria-label="Tampilkan password"><i class="bi bi-eye"></i></button></div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="btn-akun"><i class="bi bi-shield-check"></i> Simpan akun</button>
+        </div>
+      </form>
 
       <form class="card form" id="form-set" novalidate>
         <fieldset id="set-fields" disabled>
@@ -270,7 +296,7 @@
   <nav class="bottomnav" aria-label="Menu utama ponsel">
     <a href="#dashboard" data-nav="dashboard"><i class="bi bi-activity"></i><span>Dashboard</span></a>
     <a href="#laporan" data-nav="laporan"><i class="bi bi-file-earmark-text"></i><span>Laporan</span></a>
-    <a href="#pengaturan" data-nav="pengaturan"><i class="bi bi-sliders"></i><span>Pengaturan</span></a>
+    <a href="#pengaturan" data-nav="pengaturan" class="admin-only"><i class="bi bi-sliders"></i><span>Pengaturan</span></a>
   </nav>
 
   <!-- Dialog admin -->
@@ -279,14 +305,55 @@
       <div class="dlg-ikon"><i class="bi bi-shield-lock"></i></div>
       <h2 id="dlg-admin-judul">Masuk admin</h2>
       <p class="muted small" id="dlg-admin-teks">Admin dapat mengunduh laporan, mencetak, mengubah pengaturan, dan mengganti logo.</p>
-      <div class="field" id="dlg-pin-wrap">
-        <label for="admin-pin">PIN admin</label>
-        <input type="password" id="admin-pin" inputmode="numeric" autocomplete="current-password" maxlength="40">
+      <div class="dlg-isian" id="dlg-isian">
+        <div class="field">
+          <label for="admin-user">Username</label>
+          <input type="text" id="admin-user" autocomplete="username" maxlength="30" spellcheck="false" autocapitalize="off">
+        </div>
+        <div class="field">
+          <label for="admin-pass">Password</label>
+          <div class="pw"><input type="password" id="admin-pass" autocomplete="current-password" maxlength="64"><button type="button" class="pw-lihat" data-lihat="admin-pass" aria-label="Tampilkan password"><i class="bi bi-eye"></i></button></div>
+        </div>
       </div>
       <p class="dlg-galat" id="dlg-galat" role="alert"></p>
       <div class="dlg-aksi">
         <button type="button" class="btn" id="dlg-batal">Batal</button>
         <button type="submit" class="btn btn-primary" id="dlg-ok"><i class="bi bi-box-arrow-in-right"></i> Masuk</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialog konfirmasi unduh laporan -->
+  <dialog class="dlg dlg-lebar" id="dlg-unduh" aria-labelledby="unduh-judul">
+    <form method="dialog" class="dlg-box" id="form-unduh" novalidate>
+      <div class="dlg-kepala">
+        <div class="dlg-ikon"><i class="bi bi-file-earmark-arrow-down"></i></div>
+        <div>
+          <h2 id="unduh-judul">Konfirmasi unduh laporan</h2>
+          <p class="muted small" id="unduh-sub">Periksa periode laporan sebelum diunduh.</p>
+        </div>
+      </div>
+      <div class="seg seg-penuh" role="group" aria-label="Pilih periode">
+        <button type="button" class="seg-btn" data-mode="bulan"><i class="bi bi-calendar3"></i> Per bulan</button>
+        <button type="button" class="seg-btn" data-mode="tanggal"><i class="bi bi-calendar-range"></i> Per tanggal</button>
+      </div>
+      <div class="field" data-mode-for="bulan">
+        <label for="unduh-bulan">Bulan laporan</label>
+        <select id="unduh-bulan"></select>
+      </div>
+      <div class="dlg-grid" data-mode-for="tanggal">
+        <div class="field"><label for="unduh-dari">Dari tanggal</label><input type="date" id="unduh-dari"></div>
+        <div class="field"><label for="unduh-sampai">Sampai tanggal</label><input type="date" id="unduh-sampai"></div>
+      </div>
+      <div class="field">
+        <label for="unduh-pond">Pond</label>
+        <select id="unduh-pond"></select>
+      </div>
+      <dl class="unduh-ringkas" id="unduh-ringkas"></dl>
+      <p class="dlg-galat" id="unduh-galat" role="alert"></p>
+      <div class="dlg-aksi">
+        <button type="button" class="btn" id="unduh-batal">Batal</button>
+        <button type="submit" class="btn btn-primary" id="unduh-ok"><i class="bi bi-download"></i> Unduh PDF</button>
       </div>
     </form>
   </dialog>
@@ -305,6 +372,7 @@
   <script src="js/dashboard.js" defer></script>
   <script src="js/laporan.js" defer></script>
   <script src="js/laporan-dashboard.js" defer></script>
+  <script src="js/konfirmasi.js" defer></script>
   <script src="js/admin.js" defer></script>
   <script src="js/pengaturan.js" defer></script>
   <script src="js/app.js" defer></script>

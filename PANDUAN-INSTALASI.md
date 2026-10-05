@@ -22,7 +22,7 @@ Data tetap di sheet respons Google Form yang sudah ada. Google Form lama tetap b
    - Di dropdown fungsi (sebelah tombol ▶), pilih **`setupAplikasi`** → klik **▶ Run**.
    - Klik **Review permissions** → pilih akun → **Advanced** → **Go to … (unsafe)** → **Allow**.
    - Di **Execution log** harus muncul ✅ nama spreadsheet dan jumlah baris data.
-5. Kembali ke spreadsheet. Sekarang ada sheet baru **Pengaturan**. Isi kolom **nilai** pada baris **`pinAdmin`** dengan PIN pilihan Bapak (mis. `2468`). PIN ini dipakai untuk **masuk sebagai admin** di aplikasi (tombol **Masuk** di kanan atas).
+5. Akun admin awal dibuat otomatis: **username `admin`**, **password `admin12345`** (lihat Execution log). Saat pertama kali masuk di aplikasi, Bapak **wajib mengganti password** ini.
 6. Kembali ke Apps Script → **Deploy → New deployment**:
    - Klik ikon ⚙️ → pilih **Web app**
    - **Execute as:** `Me`
@@ -30,12 +30,20 @@ Data tetap di sheet respons Google Form yang sudah ada. Google Form lama tetap b
    - Klik **Deploy** → **salin URL** yang berakhiran **`/exec`**.
 7. Uji: buka `URL_EXEC?action=ping` di browser. Harus tampil `{"success":true,"message":"API Inspeksi Harian aktif",...}`.
 
+### Memperbarui ke versi 4.0 (login username & password, konfirmasi unduh)
+
+1. Tempel `Kode.gs` versi 4.0, lalu simpan (Ctrl+S).
+2. **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy.** URL `/exec` tetap sama.
+3. Ganti isi repo GitHub dengan ZIP frontend terbaru (ada file baru `js/konfirmasi.js`), isi lagi `GAS_URL`, lalu push.
+4. **Login pertama setelah pembaruan:** username **`admin`**, password = **PIN lama** Bapak (isi `pinAdmin` sebelumnya). Setelah login pertama, baris `pinAdmin` otomatis dihapus dari sheet Pengaturan, sehingga password tidak lagi terlihat di spreadsheet. Bila sebelumnya tidak ada PIN, password awalnya `admin12345`.
+5. Aplikasi langsung membuka **Pengaturan → Akun admin**. Ganti password (boleh juga ganti username). Fitur admin lain aktif setelah password diganti.
+
 ### Memperbarui ke versi 3.0 (admin, unduh laporan dashboard, logo)
 
 1. Tempel `Kode.gs` versi 3.0, lalu simpan (Ctrl+S).
 2. **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy.** URL `/exec` tetap sama.
 3. Ganti isi repo GitHub dengan ZIP frontend terbaru (ada file baru `js/admin.js` dan `js/laporan-dashboard.js`), isi lagi `GAS_URL`, lalu push.
-4. Pastikan baris `pinAdmin` di sheet **Pengaturan** sudah terisi. Sheet tersembunyi **Logo** akan dibuat otomatis saat logo pertama kali diunggah.
+4. Sheet tersembunyi **Logo** akan dibuat otomatis saat logo pertama kali diunggah.
 
 ### Memperbarui dari versi 1.x ke 2.0
 
@@ -140,17 +148,26 @@ Bila tampilan belum berubah, tekan **Ctrl+Shift+R**.
 
 | Menu | Fungsi |
 |---|---|
-| **Dashboard** | Grafik pH & TSS per pond, sampel di luar batas, kondisi terakhir tiap pond, kerusakan yang berulang. Admin: tombol **Unduh laporan** → PDF A4 berisi ringkasan, tabel, grafik, dan tanda tangan supervisor sesuai filter yang sedang dipilih |
-| **Laporan** | Pilih Harian / Mingguan (Senin–Minggu) / Bulanan / Rentang tanggal, filter pond & kata kunci. Admin: **Unduh PDF** (A4) atau **Cetak** |
-| **Pengaturan** | Admin: unggah/hapus **logo**, ubah judul lokasi, nama & jabatan penanda tangan, batas pH/TSS, margin & orientasi PDF |
+| **Dashboard** | Grafik pH & TSS per pond, sampel di luar batas, kondisi terakhir tiap pond, kerusakan yang berulang. Admin: tombol **Unduh laporan** → jendela konfirmasi → PDF A4 berisi ringkasan, tabel, grafik, dan tanda tangan supervisor |
+| **Laporan** | Pilih Harian / Mingguan (Senin–Minggu) / Bulanan / Rentang tanggal, filter pond & kata kunci. Admin: **Unduh PDF** (lewat jendela konfirmasi) atau **Cetak** |
+| **Pengaturan** *(hanya terlihat oleh admin)* | Ganti **username & password** admin, unggah/hapus **logo**, ubah judul lokasi, nama & jabatan penanda tangan, batas pH/TSS, margin & orientasi PDF |
 
 **Mode admin:**
-- Klik **Masuk** di kanan atas, lalu ketik PIN admin. Tombol berubah menjadi **Admin** (kuning).
-- Sesi berlaku **12 jam** di perangkat itu. PIN tidak disimpan di perangkat; yang disimpan hanya kunci sesi dari server.
-- Mengganti PIN di sheet Pengaturan otomatis membatalkan semua sesi admin yang sedang aktif (paling lambat ±10 menit).
-- Setelah 5 kali PIN salah, login dikunci 10 menit.
-- Untuk keluar: klik tombol **Admin** → **Keluar**. Selalu keluar bila memakai perangkat orang lain.
+- Klik **Masuk** di kanan atas, lalu isi **username** dan **password**. Tombol berubah kuning dan menampilkan username.
+- Menu **Pengaturan** hanya muncul setelah masuk sebagai admin. Tamu hanya melihat Dashboard dan Laporan.
+- Sesi berlaku **12 jam** di perangkat itu. Password tidak disimpan di perangkat; yang disimpan hanya kunci sesi dari server.
+- Setelah 5 kali login gagal, login dikunci 10 menit.
+- Untuk keluar: klik tombol username di kanan atas → **Keluar**. Selalu keluar bila memakai perangkat orang lain.
 - Tamu tetap bisa melihat dashboard dan pratinjau laporan, tetapi tidak bisa mengunduh atau mencetak, termasuk lewat Ctrl+P.
+
+**Ganti username / password:** buka **Pengaturan → Akun admin**, isi username dan/atau password baru, lalu isi **password saat ini** sebagai konfirmasi dan klik **Simpan akun**.
+- Password minimal 8 karakter, berisi huruf dan angka, dan tidak memuat username.
+- Setelah akun diganti, perangkat lain yang sedang masuk sebagai admin otomatis keluar.
+- Akun disimpan di **Script Properties** Apps Script dalam bentuk hash, bukan di spreadsheet, sehingga orang yang membuka spreadsheet tidak bisa melihat password.
+
+**Lupa password:** buka editor Apps Script → pilih fungsi **`resetAkunAdmin`** → ▶ Run. Akun kembali ke username `admin` dan password `admin12345`. Segera masuk, lalu ganti password.
+
+**Jendela konfirmasi unduh:** sebelum PDF dibuat, muncul jendela berisi pilihan **Per bulan** atau **Per tanggal** (dari–sampai), pilihan pond, serta ringkasan (judul/periode, jumlah entri, ukuran kertas, nama file). Periksa atau ubah bila perlu, lalu klik **Unduh PDF**. Bila periode yang dipilih tidak punya data, tombol Unduh tidak aktif. Periode yang dipilih ikut diterapkan ke halaman, sehingga tampilan di layar sama dengan isi PDF.
 
 **Logo:** unggah di Pengaturan (PNG/JPG/SVG). Gambar otomatis dikecilkan, lalu tampil di header aplikasi, PDF laporan inspeksi, dan PDF laporan dashboard. Logo PNG berlatar transparan memberi hasil paling rapi.
 
@@ -180,10 +197,11 @@ Bila tampilan belum berubah, tekan **Ctrl+Shift+R**.
 | "Aplikasi belum tersambung ke spreadsheet" | `GAS_URL` belum diisi | Isi `js/config.js`, lalu push ulang |
 | "Server tidak mengirim JSON" | Deploy belum **Anyone**, atau URL bukan `/exec` | Ulangi langkah A6 |
 | Perubahan Kode.gs tidak berlaku | Deployment belum diperbarui | Manage deployments → Edit → New version |
-| "PIN admin belum diatur" | Baris `pinAdmin` di sheet Pengaturan kosong | Isi PIN di sheet Pengaturan |
-| "Terlalu banyak percobaan PIN salah" | 5 kali PIN salah | Tunggu 10 menit, lalu coba lagi |
-| Tiba-tiba keluar dari mode admin | Sesi 12 jam habis, atau PIN diganti | Masuk lagi dengan PIN terbaru |
-| Tombol Unduh/Cetak tidak terlihat | Belum masuk sebagai admin | Klik **Masuk** di kanan atas |
+| "Username atau password salah" | Salah ketik, atau akun sudah diganti | Periksa huruf besar/kecil password; bila lupa jalankan `resetAkunAdmin` |
+| "Terlalu banyak percobaan gagal" | 5 kali login gagal | Tunggu 10 menit, lalu coba lagi |
+| "Ganti password awal terlebih dahulu" | Masih memakai password awal | Pengaturan → Akun admin → isi password baru |
+| Tiba-tiba keluar dari mode admin | Sesi 12 jam habis, atau akun diganti dari perangkat lain | Masuk lagi dengan akun terbaru |
+| Menu Pengaturan / tombol Unduh tidak terlihat | Belum masuk sebagai admin | Klik **Masuk** di kanan atas |
 | Situs GitHub 404 | `index.html` tidak di root repo | Push ulang dari folder `inspeksi-harian` |
 | Data baru dari Google Form belum muncul | Cache browser, atau jeda rumus impor | Klik tombol ⟳ di kanan atas; untuk IMPORTDATA tunggu hingga ±1 jam |
 | "Data impor … belum siap (A1: #REF!)" | IMPORTRANGE belum diizinkan / rumus error | Buka spreadsheet Gmail, klik sel A1 → Izinkan akses |

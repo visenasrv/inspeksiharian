@@ -9,26 +9,69 @@ const Pengaturan = {
     $('#form-set').addEventListener('submit', e => this.simpan(e));
     $('#set-logo').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) this.gantiLogo(f); });
     $('#btn-hapus-logo').addEventListener('click', () => this.hapusLogo());
+    $('#form-akun').addEventListener('submit', e => this.simpanAkun(e));
   },
 
   isi() {
-    const p = STATE.pengaturan, admin = Admin.aktif();
+    const p = STATE.pengaturan, admin = Admin.aktif(), wajib = Admin.wajibGanti();
     KUNCI_SET.forEach(k => { const el = $(`#set-${k}`); if (el) el.value = p[k] ?? ''; });
-    $('#set-fields').disabled = !admin;
+    $('#set-fields').disabled = !admin || wajib;           // pengaturan lain terkunci sampai password awal diganti
     $('#btn-hapus-logo').disabled = !STATE.logo;
     Logo.tampilkan();
+
+    // Akun admin
+    $('#akun-wajib').hidden = !wajib;
+    $('#form-akun').classList.toggle('wajib', wajib);
+    $('#akun-baru').placeholder = wajib ? 'wajib diisi' : 'kosongkan bila tidak diganti';
+    if (admin && document.activeElement !== $('#akun-username')) $('#akun-username').value = Admin.sesi.username;
 
     const kartu = $('#admin-card');
     kartu.classList.toggle('aktif', admin);
     kartu.innerHTML = admin
       ? `<div class="ikon"><i class="bi bi-person-check-fill"></i></div>
-         <div class="teks"><b>Anda masuk sebagai admin</b><span>Sesi berlaku sampai ${esc(Admin.jamHabis())}. Perubahan langsung dipakai di dashboard dan laporan.</span></div>
+         <div class="teks"><b>Masuk sebagai ${esc(Admin.sesi.username)}</b><span>Sesi berlaku sampai ${esc(Admin.jamHabis())}. Perubahan langsung dipakai di dashboard dan laporan.</span></div>
          <button type="button" class="btn" id="btn-keluar"><i class="bi bi-box-arrow-right"></i> Keluar</button>`
-      : `<div class="ikon"><i class="bi bi-lock"></i></div>
-         <div class="teks"><b>Mode tamu</b><span>Masuk sebagai admin untuk mengubah pengaturan, mengganti logo, serta mengunduh dan mencetak laporan.${p.pinDiatur ? '' : ' PIN admin diatur di spreadsheet → sheet <b>Pengaturan</b> → baris <b>pinAdmin</b>.'}</span></div>
-         <button type="button" class="btn btn-primary" data-masuk-admin><i class="bi bi-box-arrow-in-right"></i> Masuk admin</button>`;
+      : '';
     const keluar = $('#btn-keluar');
     if (keluar) keluar.addEventListener('click', () => Admin.keluar());
+  },
+
+  /** Ganti username dan/atau password (diverifikasi server, tidak optimistis) */
+  async simpanAkun(e) {
+    e.preventDefault();
+    if (!Admin.aktif()) { Admin.bukaDialog(); return; }
+    const userBaru = $('#akun-username').value.trim();
+    const baru = $('#akun-baru').value, ulang = $('#akun-ulang').value, lama = $('#akun-lama').value;
+    const salah = (pesan, el) => { notif(pesan, 'error'); if (el) el.focus(); };
+
+    if (!/^[A-Za-z0-9._-]{3,30}$/.test(userBaru)) return salah('Username 3–30 karakter: huruf, angka, titik, garis bawah, atau minus.', $('#akun-username'));
+    if (Admin.wajibGanti() && !baru) return salah('Password awal wajib diganti. Isi password baru.', $('#akun-baru'));
+    if (baru) {
+      if (baru.length < 8) return salah('Password baru minimal 8 karakter.', $('#akun-baru'));
+      if (!/[A-Za-z]/.test(baru) || !/[0-9]/.test(baru)) return salah('Password baru harus berisi huruf dan angka.', $('#akun-baru'));
+      if (baru.toLowerCase().includes(userBaru.toLowerCase())) return salah('Password tidak boleh memuat username.', $('#akun-baru'));
+      if (baru !== ulang) return salah('Ulangi password baru tidak sama.', $('#akun-ulang'));
+    }
+    if (!baru && userBaru === Admin.sesi.username) return salah('Tidak ada perubahan.');
+    if (!lama) return salah('Isi password saat ini untuk konfirmasi.', $('#akun-lama'));
+
+    const btn = $('#btn-akun'), label = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner sm"></span> Menyimpan…';
+    try {
+      const res = await apiPost('gantiAkun', { token: Admin.token(), data: { passwordLama: lama, usernameBaru: userBaru, passwordBaru: baru } });
+      if (!res.success) throw new Error(res.message);
+      ['#akun-baru', '#akun-ulang', '#akun-lama'].forEach(id => { $(id).value = ''; });
+      Admin.simpanSesi(res.data);                 // sesi baru; perangkat lain otomatis keluar
+      $('#admin-user').value = res.data.username;
+      notif(res.message);
+    } catch (err) {
+      notif('Gagal: ' + err.message, 'error');
+      Admin.tanganiGalat(err);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = label;
+    }
   },
 
   /** Optimistic: langsung diterapkan ke dashboard & laporan, disimpan ke server di latar */

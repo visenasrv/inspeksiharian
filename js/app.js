@@ -87,6 +87,10 @@ function tandaiSemuaKotor() {
 
 function navigasi(id) {
   if (!SECTIONS.includes(id)) id = 'dashboard';
+  if (id === 'pengaturan' && !Admin.aktif()) {          // Pengaturan khusus admin
+    id = 'dashboard';
+    if (location.hash === '#pengaturan') history.replaceState(null, '', '#dashboard');
+  }
   sectionAktif = id;
   $$('.section').forEach(s => s.classList.toggle('active', s.dataset.section === id));
   $$('[data-nav]').forEach(a => a.classList.toggle('active', a.dataset.nav === id));
@@ -127,8 +131,7 @@ function olahPengaturan(p = {}) {
     tssMax: Number(p.tssMax ?? 200),
     marginPdf: Number(p.marginPdf || 6),
     orientasiPdf: p.orientasiPdf === 'portrait' ? 'portrait' : 'landscape',
-    logoVersi: String(p.logoVersi || ''),
-    pinDiatur: !!p.pinDiatur
+    logoVersi: String(p.logoVersi || '')
   };
 }
 
@@ -210,6 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
   Dashboard.init();
   Laporan.init();
   Pengaturan.init();
+  KonfirmasiUnduh.init();
   Admin.init();
   navigasi(location.hash.slice(1) || 'dashboard');
 

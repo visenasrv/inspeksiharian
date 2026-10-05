@@ -4,8 +4,8 @@ Frontend statis (HTML/CSS/JS) untuk data inspeksi harian pond. Data dibaca dari 
 
 - **Dashboard**: pH & TSS per pond, penanda di luar batas, kondisi terakhir tiap pond, rekap kerusakan berulang; admin dapat mengunduh laporan PDF
 - **Laporan**: harian / mingguan / bulanan / rentang tanggal → PDF A4 dengan logo, judul, dan tanda tangan supervisor (admin)
-- **Pengaturan**: logo, judul, penanda tangan, batas mutu, margin PDF (admin)
-- **Mode admin**: masuk dengan PIN → sesi 12 jam (token dari server)
+- **Pengaturan** (hanya admin): akun admin, logo, judul, penanda tangan, batas mutu, margin PDF
+- **Mode admin**: username & password (hash di Script Properties) → sesi 12 jam; jendela konfirmasi bulan/tanggal sebelum unduh
 
 ## Struktur
 
@@ -19,6 +19,7 @@ js/dashboard.js
 js/laporan.js
 js/laporan-dashboard.js ← PDF laporan dashboard
 js/admin.js       ← sesi admin & logo
+js/konfirmasi.js  ← jendela konfirmasi unduh
 js/pengaturan.js
 js/app.js
 ```
